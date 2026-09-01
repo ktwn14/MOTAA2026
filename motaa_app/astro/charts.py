@@ -83,13 +83,17 @@ def build_diamond_chart_data(chart: dict):
     bhavas = chart["bhavas"]
     lagna_rashi_idx = chart["lagna_rashi_idx"]
 
-    # --- Rashi chart: whole-sign house numbering ---
-    rashi_content = {h: [bhavas[h - 1].rashi_name] for h in range(1, 13)}
+    # --- Rashi chart: FIXED rashi positions (Mesha/Aries always at the
+    # top-middle grid slot, then Vrishabha/Taurus, Mithuna/Gemini, ... going
+    # around) — this shows each planet in its own natural sign, independent
+    # of the lagna, unlike the Bhava chart below (which is lagna/house-
+    # system relative). The lagna itself is just a "(လဂ်)" marker placed
+    # into whichever grid slot its own rashi falls in.
+    rashi_content = {h: [RASHI_MM[h - 1]] for h in range(1, 13)}
     for name in GRAHA9:
         gp = positions[name]
-        h = motaa.whole_sign_house(gp.rashi_idx, lagna_rashi_idx)
-        rashi_content[h].append(GRAHA_MM[name])
-    rashi_content[motaa.whole_sign_house(lagna_rashi_idx, lagna_rashi_idx)].insert(0, "(လဂ်)")
+        rashi_content[gp.rashi_idx].append(GRAHA_MM[name])
+    rashi_content[lagna_rashi_idx].insert(0, "(လဂ်)")
 
     # --- Bhava chart: Bhava-Madhya (or chosen house system) placement ---
     bhava_content = {h: [bhavas[h - 1].rashi_name] for h in range(1, 13)}
@@ -98,15 +102,13 @@ def build_diamond_chart_data(chart: dict):
         bhava_content[gp.house].append(GRAHA_MM[name])
     bhava_content[1].insert(0, "(လဂ်)")
 
-    # --- Navamsa (D9) chart: whole-sign from navamsa lagna ---
+    # --- Navamsa (D9) chart: same fixed-rashi convention as the Rashi
+    # chart above (Mesha/Aries always at the top-middle grid slot) ---
     nav_lagna_idx = chart["navamsa_lagna_idx"]
-    nav_content = {
-        h: [RASHI_MM[(nav_lagna_idx - 1 + (h - 1)) % 12]] for h in range(1, 13)
-    }
+    nav_content = {h: [RASHI_MM[h - 1]] for h in range(1, 13)}
     for name in GRAHA9:
         nav_idx = chart["navamsa_grahas"][name]
-        h = motaa.whole_sign_house(nav_idx, nav_lagna_idx)
-        nav_content[h].append(GRAHA_MM[name])
-    nav_content[1].insert(0, "(လဂ်)")
+        nav_content[nav_idx].append(GRAHA_MM[name])
+    nav_content[nav_lagna_idx].insert(0, "(လဂ်)")
 
     return {"rashi": rashi_content, "bhava": bhava_content, "navamsa": nav_content}
