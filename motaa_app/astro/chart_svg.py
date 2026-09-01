@@ -141,12 +141,20 @@ def polygon_to_svg_points(poly: List[Point]) -> str:
 
 def render_diamond_svg(house_content: Dict[int, List[str]], center_title: str = "",
                         center_sub: str = "", box: float = 300.0,
-                        font_family: str = "'Masterpiece Uni Round','Myanmar Text',sans-serif") -> str:
+                        font_family: str = "'Masterpiece Uni Round','Myanmar Text',sans-serif",
+                        position_labels: Dict[int, str] = None) -> str:
     """
-    house_content: {house_number: [line1, line2, ...]} — short text lines
-    (e.g. rashi name, then planet abbreviations) to place in each house.
+    house_content: {grid_position: [line1, line2, ...]} — short text lines
+    (e.g. rashi name, then planet abbreviations) to place in each of the
+    12 fixed grid slots (1 = top-middle, going counter-clockwise).
+    position_labels: optional {grid_position: label} for the small number
+    shown near each slot's outer tip. Defaults to the grid position itself
+    (1-12) — pass this to show something else instead, e.g. each slot's
+    *house* number in a Bhava chart, which (unlike the slot's rashi) moves
+    around the fixed grid depending on where the lagna falls.
     Returns a standalone <svg>...</svg> string.
     """
+    position_labels = position_labels or {}
     polys = house_polygons(box)
     parts = [f'<svg viewBox="0 0 {box} {box}" xmlns="http://www.w3.org/2000/svg" '
               f'style="font-family:{font_family};max-width:100%;height:auto;">']
@@ -184,9 +192,11 @@ def render_diamond_svg(house_content: Dict[int, List[str]], center_title: str = 
         n = len(lines)
         line_h, size_head, size_body, pull = text_layout_for_lines(n, box)
         anchor_x, anchor_y = house_label_anchor(h, box, pull=pull)
-        # house number, small, near the outer-most vertex of the polygon
+        # small label near the outer-most vertex of the polygon (house
+        # number for a Bhava chart, otherwise just the grid position)
         num_x, num_y = _outer_label_point(h, poly, box)
-        parts.append(f'<text x="{num_x:.1f}" y="{num_y:.1f}" font-size="9" fill="#9ca3af">{h}</text>')
+        label = position_labels.get(h, h)
+        parts.append(f'<text x="{num_x:.1f}" y="{num_y:.1f}" font-size="9" fill="#9ca3af">{label}</text>')
 
         start_y = anchor_y - (n - 1) * line_h / 2.0
         pad = box * 0.03

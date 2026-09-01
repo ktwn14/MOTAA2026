@@ -93,7 +93,8 @@ def calculate():
         "rashi": render_diamond_svg(diamonds["rashi"], center_title=binput.name,
                                      center_sub=f"ရာသီ ဇယား — {chart['lagna_rashi_mm']} လဂ်"),
         "bhava": render_diamond_svg(diamonds["bhava"], center_title=binput.name,
-                                     center_sub="ဘာဝ ဇယား"),
+                                     center_sub="ဘာဝ ဇယား",
+                                     position_labels=diamonds["bhava_position_labels"]),
         "navamsa": render_diamond_svg(diamonds["navamsa"], center_title=binput.name,
                                        center_sub="နဝင်း (D9) ဇယား"),
     }
