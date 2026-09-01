@@ -67,21 +67,58 @@ def house_polygons(box: float = 300.0) -> Dict[int, List[Point]]:
     return polys
 
 
-def house_label_anchor(house: int, box: float = 300.0) -> Point:
+# Each corner cell holds 2 triangular houses split by one diagonal; these
+# are the two houses sharing each diagonal.
+_CORNER_SIBLING = {2: 3, 3: 2, 5: 6, 6: 5, 8: 9, 9: 8, 11: 12, 12: 11}
+
+
+def house_label_anchor(house: int, box: float = 300.0, pull: float = 0.32) -> Point:
     """A reasonable point to place text for a house. For the 4 plain
     (rectangular) Kendra houses this is the simple centroid. For the 8
-    triangular corner houses, the centroid is pulled slightly toward the
-    polygon's own "outer" vertex (the one furthest from the box center) so
-    multi-line text clears the diagonal divider line."""
-    poly = house_polygons(box)[house]
+    triangular corner houses, the centroid is pulled toward the polygon's
+    own vertex that is *not* shared with its sibling triangle (the other
+    house occupying the same corner cell) — `pull` controls how far (0 =
+    centroid, 1 = that vertex); callers with a crowded (many-planet) house
+    should pass a larger pull so that house's text leans further away from
+    the diagonal it shares with its sibling.
+
+    The two triangles in a corner cell always share the diagonal's two
+    endpoints and differ only in their third vertex, so pulling toward
+    "whichever vertex is furthest from the box center" (an earlier version
+    of this function) picks the *same* point — one of the diagonal's own
+    endpoints — for both siblings, which pulls a crowded house's text
+    toward its sibling instead of away from it. Pulling toward the vertex
+    unique to each triangle sends the two siblings apart instead."""
+    polys = house_polygons(box)
+    poly = polys[house]
     cx = sum(p[0] for p in poly) / len(poly)
     cy = sum(p[1] for p in poly) / len(poly)
     if len(poly) == 3:
-        bx, by = box / 2.0, box / 2.0
-        outer = max(poly, key=lambda p: (p[0] - bx) ** 2 + (p[1] - by) ** 2)
-        cx = cx * 0.68 + outer[0] * 0.32
-        cy = cy * 0.68 + outer[1] * 0.32
+        sibling_poly = polys[_CORNER_SIBLING[house]]
+        outer = next(p for p in poly if p not in sibling_poly)
+        cx = cx * (1 - pull) + outer[0] * pull
+        cy = cy * (1 - pull) + outer[1] * pull
     return cx, cy
+
+
+def text_layout_for_lines(n: int, box: float = 300.0) -> Tuple[float, float, float, float]:
+    """Line-height, head font-size, body font-size, and anchor `pull` for a
+    house whose text block has `n` lines, scaled to `box`. Houses with more
+    planets stacked in them get smaller/tighter text *and* a stronger pull
+    toward their triangle's outer vertex, so the block both shrinks and
+    leans away from the shared diagonal instead of overrunning it (the
+    fixed-size, symmetric-growth layout this replaces let 3+ planet houses
+    overlap their neighbor's text, or spill past the chart's own border)."""
+    scale = box / 300.0
+    if n <= 2:
+        line_h, size_head, size_body, pull = 13.0, 11.0, 9.5, 0.32
+    elif n == 3:
+        line_h, size_head, size_body, pull = 10.5, 10.0, 8.5, 0.44
+    elif n == 4:
+        line_h, size_head, size_body, pull = 9.0, 9.5, 7.5, 0.54
+    else:
+        line_h, size_head, size_body, pull = 7.5, 9.0, 6.5, 0.60
+    return line_h * scale, size_head * scale, size_body * scale, pull
 
 
 def center_box(box: float = 300.0):
@@ -141,21 +178,24 @@ def render_diamond_svg(house_content: Dict[int, List[str]], center_title: str = 
     # house numbers + content
     for h in range(1, 13):
         poly = polys[h]
-        anchor_x, anchor_y = house_label_anchor(h, box)
+        lines = house_content.get(h, [])
+        n = len(lines)
+        line_h, size_head, size_body, pull = text_layout_for_lines(n, box)
+        anchor_x, anchor_y = house_label_anchor(h, box, pull=pull)
         # house number, small, near the outer-most vertex of the polygon
         num_x, num_y = _outer_label_point(h, poly, box)
         parts.append(f'<text x="{num_x:.1f}" y="{num_y:.1f}" font-size="9" fill="#9ca3af">{h}</text>')
 
-        lines = house_content.get(h, [])
-        n = len(lines)
-        start_y = anchor_y - (n - 1) * 6.5
+        start_y = anchor_y - (n - 1) * line_h / 2.0
+        pad = box * 0.03
+        start_y = max(pad, min(start_y, box - pad - max(n - 1, 0) * line_h))
         for i, line in enumerate(lines):
-            y = start_y + i * 13
+            y = start_y + i * line_h
             weight = "700" if i == 0 else "500"
-            size = 11 if i == 0 else 9.5
+            size = size_head if i == 0 else size_body
             color = "#4f33cc" if i == 0 else "#1f2430"
             parts.append(f'<text x="{anchor_x:.1f}" y="{y:.1f}" text-anchor="middle" '
-                          f'font-size="{size}" font-weight="{weight}" fill="{color}">{_esc(line)}</text>')
+                          f'font-size="{size:.1f}" font-weight="{weight}" fill="{color}">{_esc(line)}</text>')
 
     parts.append("</svg>")
     return "".join(parts)

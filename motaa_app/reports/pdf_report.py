@@ -22,7 +22,7 @@ from reportlab.graphics.shapes import Drawing, Polygon, Line, String
 from reportlab.graphics import renderPM
 
 from astro.constants import GRAHA_MM, RASHI_MM, GRAHA9
-from astro.chart_svg import house_polygons, house_label_anchor, center_box
+from astro.chart_svg import house_polygons, house_label_anchor, center_box, text_layout_for_lines
 
 FONT_NAME = "Helvetica"
 _CANDIDATE_FONTS = [
@@ -93,13 +93,21 @@ def _diamond_drawing(house_content, title, box=260):
         d.add(p)
 
     for h in range(1, 13):
-        ax, ay = house_label_anchor(h, box)
         lines = house_content.get(h, [])
         n = len(lines)
-        start_y = ay + (n - 1) * 5 * scale
+        # crowded (3+ planet) houses get smaller text and lean further
+        # toward their triangle's outer tip, so the block shrinks and moves
+        # away from the shared diagonal instead of overlapping the
+        # neighboring house's text (see chart_svg.text_layout_for_lines)
+        line_h, size_head, size_body, pull = text_layout_for_lines(n, box)
+        ax, ay = house_label_anchor(h, box, pull=pull)
+        start_y = ay + (n - 1) * line_h / 2.0
+        pad = box * 0.03
+        start_y = min(start_y, box - pad)
+        start_y = max(start_y, pad + max(n - 1, 0) * line_h)
         for i, line in enumerate(lines):
-            y = start_y - i * 10 * scale
-            size = (8 if i == 0 else 7) * scale
+            y = start_y - i * line_h
+            size = size_head if i == 0 else size_body
             color = colors.HexColor("#4f33cc") if i == 0 else colors.HexColor("#1f2430")
             d.add(String(ax, flip(y), line, fontName=FONT_NAME, fontSize=size,
                           fillColor=color, textAnchor="middle"))
