@@ -44,25 +44,34 @@ def house_polygons(box: float = 300.0) -> Dict[int, List[Point]]:
     tl, tr, br, bl = cell(2, 1)
     polys[10] = [tl, tr, br, bl]          # right-middle
 
-    # --- top-left corner (0,0): diagonal TL-BR ("\"), houses 2 & 3 ---
+    # Every corner cell is split by a *chord of the outer square's own main
+    # diagonal* — i.e. the line from that cell's own outer corner (a corner
+    # of the whole box) to the inner grid corner nearest the box's center.
+    # This makes all 4 corners consistent with each other (and with the
+    # box's two real diagonals, (0,0)-(3u,3u) and (3u,0)-(0,3u)) — an
+    # earlier version of this function used a different, unrelated chord
+    # for 3 of the 4 corners, which drew a diagonal that didn't pass
+    # through that corner's own outer tip at all.
+
+    # --- top-left corner (0,0): diagonal (0,0)-(u,u) "\", houses 2 & 3 ---
     tl, tr, br, bl = cell(0, 0)
     polys[2] = [tl, tr, br]               # touches TOP+RIGHT edge (shares w/ H1)
     polys[3] = [tl, bl, br]               # touches LEFT+BOTTOM edge (shares w/ H4)
 
-    # --- bottom-left corner (0,2): diagonal TL-BR ("\"), houses 5 & 6 ---
+    # --- bottom-left corner (0,2): diagonal (0,3u)-(u,2u) "/", houses 5 & 6 ---
     tl, tr, br, bl = cell(0, 2)
-    polys[5] = [tl, tr, br]               # touches TOP+RIGHT (shares w/ H4 above)
-    polys[6] = [tl, bl, br]               # outer tip (touches LEFT+BOTTOM)
+    polys[5] = [tl, tr, bl]               # touches TOP edge (shares w/ H4 above)
+    polys[6] = [tr, br, bl]               # touches RIGHT edge (shares w/ H7)
 
-    # --- bottom-right corner (2,2): diagonal BL-TR ("/"), houses 8 & 9 ---
+    # --- bottom-right corner (2,2): diagonal (2u,2u)-(3u,3u) "\", houses 8 & 9 ---
     tl, tr, br, bl = cell(2, 2)
-    polys[8] = [tl, tr, bl]               # touches TOP+LEFT (shares w/ H7)
-    polys[9] = [tr, br, bl]               # outer tip (touches RIGHT+BOTTOM)
+    polys[8] = [tl, bl, br]               # touches LEFT edge (shares w/ H7)
+    polys[9] = [tl, tr, br]               # touches TOP edge (shares w/ H10)
 
-    # --- top-right corner (2,0): diagonal BL-TR ("/"), houses 11 & 12 ---
+    # --- top-right corner (2,0): diagonal (3u,0)-(2u,u) "/", houses 11 & 12 ---
     tl, tr, br, bl = cell(2, 0)
-    polys[11] = [tr, br, bl]              # touches RIGHT+BOTTOM (shares w/ H10 below)
-    polys[12] = [tl, tr, bl]              # touches TOP+LEFT (shares w/ H1)
+    polys[11] = [tr, br, bl]              # touches BOTTOM edge (shares w/ H10 below)
+    polys[12] = [tl, tr, bl]              # touches LEFT edge (shares w/ H1)
 
     return polys
 
@@ -144,23 +153,16 @@ def render_diamond_svg(house_content: Dict[int, List[str]], center_title: str = 
     parts.append(f'<rect x="0" y="0" width="{box}" height="{box}" '
                   f'fill="#fffdf7" stroke="#2b2b2b" stroke-width="2"/>')
 
-    # grid + diagonal lines
+    # grid + diagonal lines — each corner's diagonal is the chord of the
+    # box's own main diagonal that falls inside that cell (matching
+    # house_polygons(); see the comment there for why this is what makes
+    # all 4 corners consistent with each other).
     u = box / 3.0
-    lines = [
-        (u, 0, u, box), (2 * u, 0, 2 * u, box),          # verticals
-        (0, u, box, u), (0, 2 * u, box, 2 * u),           # horizontals
-        (0, 0, u, u),                                      # TL corner diagonal \
-        (0, 2 * u, u, 3 * u),                              # BL corner diagonal \
-        (2 * u, 2 * u, 3 * u, 3 * u),                       # BR corner diagonal / (part1)
-        (3 * u, 2 * u, 2 * u, 3 * u),                       # BR corner diagonal / (part2, drawn as line too)
-        (2 * u, u, 3 * u, 0),                               # TR corner diagonal /
-    ]
-    # simpler: draw exact diagonals matching house_polygons()
     diag_lines = [
-        (0, 0, u, u),                 # TL: \
-        (0, 2 * u, u, 3 * u),         # BL: \
-        (2 * u, 3 * u, 3 * u, 2 * u),  # BR: /
-        (2 * u, 0, 3 * u, u),          # TR: /
+        (0, 0, u, u),                  # TL: (0,0) -> (u,u)
+        (0, 3 * u, u, 2 * u),          # BL: (0,3u) -> (u,2u)
+        (3 * u, 3 * u, 2 * u, 2 * u),  # BR: (3u,3u) -> (2u,2u)
+        (3 * u, 0, 2 * u, u),          # TR: (3u,0) -> (2u,u)
     ]
     for x1, y1, x2, y2 in [(u, 0, u, box), (2 * u, 0, 2 * u, box),
                             (0, u, box, u), (0, 2 * u, box, 2 * u)] + diag_lines:
