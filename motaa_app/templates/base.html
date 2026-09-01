@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}MOTAA ဇာတာ တွက်စက်{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <a href="{{ url_for('index') }}" class="brand">MOTAA ဇာတာ တွက်စက်</a>
+  <span class="tag">Swiss Ephemeris + MOTAA Level-1 + Vimshottari Dasha</span>
+</header>
+<main>
+  {% block content %}{% endblock %}
+</main>
+<footer>
+  <p>MOTAA Astrology Course (Level-1) methodology · Swiss Ephemeris (astro.com) · ကိုယ်ပိုင် သုံးရန်အတွက် တည်ဆောက်ထားခြင်း</p>
+</footer>
+</body>
+</html>
