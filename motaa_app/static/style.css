@@ -1,0 +1,84 @@
+:root {
+  --bg: #f4f5f7;
+  --card-bg: #ffffff;
+  --ink: #1f2430;
+  --muted: #6b7280;
+  --accent: #6d4aff;
+  --accent-dark: #4f33cc;
+  --soma: #1a7f4b;
+  --papa: #b3261e;
+  --border: #e3e5ea;
+  font-family: "Masterpiece Uni Round", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Myanmar Text", "Myanmar MN", "Helvetica Neue", Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); }
+.topbar {
+  display: flex; align-items: baseline; gap: 12px;
+  padding: 16px 28px; background: linear-gradient(120deg, var(--accent), var(--accent-dark));
+  color: white;
+}
+.topbar .brand { color: white; font-weight: 700; font-size: 1.2rem; text-decoration: none; }
+.topbar .tag { font-size: .8rem; opacity: .85; }
+main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
+footer { text-align: center; color: var(--muted); font-size: .8rem; padding: 24px; }
+
+.card {
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
+  padding: 22px 24px; margin-bottom: 22px; box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+.form-card { max-width: 640px; margin: 20px auto; }
+h1 { margin: 0 0 6px; font-size: 1.5rem; }
+h2 { margin: 0 0 14px; font-size: 1.15rem; color: var(--accent-dark); }
+.muted { color: var(--muted); }
+.small { font-size: .8rem; }
+
+.grid-form { display: flex; flex-direction: column; gap: 16px; margin-top: 18px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label { font-size: .85rem; color: var(--muted); }
+.field-group { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.field-group legend { font-size: .85rem; color: var(--muted); padding: 0 6px; }
+.inline-fields { display: flex; gap: 10px; }
+input, select {
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: .95rem;
+  background: #fbfbfd; width: 100%;
+}
+.btn-primary {
+  background: var(--accent); color: white; border: none; padding: 12px 20px; border-radius: 10px;
+  font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; text-align: center;
+}
+.btn-primary:hover { background: var(--accent-dark); }
+.btn-secondary {
+  background: transparent; color: var(--accent-dark); border: 1px solid var(--accent);
+  padding: 12px 20px; border-radius: 10px; font-weight: 600; text-decoration: none; display: inline-block;
+}
+
+.result-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+.lagna-line { font-size: 1.05rem; margin-top: 8px; }
+.actions { display: flex; gap: 10px; }
+
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .88rem; }
+th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: center; white-space: nowrap; }
+thead th { background: #f0eeff; color: var(--accent-dark); position: sticky; top: 0; }
+tr.soma td:nth-child(4) { color: var(--soma); font-weight: 600; }
+tr.papa td:nth-child(4) { color: var(--papa); font-weight: 600; }
+td.strong { font-weight: 700; }
+td.pos { color: var(--soma); }
+td.neg { color: var(--papa); }
+.sub-table { font-size: .8rem; margin-top: 6px; }
+.sub-table td { border-bottom: 1px dashed var(--border); padding: 4px 8px; }
+details summary { cursor: pointer; color: var(--accent-dark); }
+.now-running { background: #eef0ff; border-radius: 8px; padding: 10px 14px; display: inline-block; }
+
+/* --- Diamond chart tabs (Rashi / Bhava / Navamsa) --- */
+.chart-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+.chart-tab {
+  background: #f0eeff; color: var(--accent-dark); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 16px; font-weight: 600; cursor: pointer; font-size: .9rem;
+}
+.chart-tab.active { background: var(--accent); color: white; }
+.chart-panel { max-width: 460px; margin: 0 auto; }
+
+@media (max-width: 640px) {
+  .inline-fields { flex-direction: column; }
+}

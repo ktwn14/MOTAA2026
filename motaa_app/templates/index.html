@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card form-card">
+  <h1>ဇာတာ Data ထည့်ရန်</h1>
+  <p class="muted">မွေးသက္ကရာဇ်၊ အချိန်၊ မွေးရပ်ဒေသ (Latitude/Longitude) ထည့်ပါ — Swiss Ephemeris က ဂြိုဟ်တည်နေရာများကို တိကျစွာ တွက်ပေးပါလိမ့်မည်။</p>
+
+  <form action="{{ url_for('calculate') }}" method="post" class="grid-form">
+
+    <div class="field">
+      <label>အမည်</label>
+      <input type="text" name="name" placeholder="ဇာတာရှင် အမည်">
+    </div>
+
+    <fieldset class="field-group">
+      <legend>မွေးနေ့</legend>
+      <div class="inline-fields">
+        <input type="number" name="year" placeholder="နှစ် (e.g. 1990)" min="1800" max="2200" required>
+        <input type="number" name="month" placeholder="လ (1-12)" min="1" max="12" required>
+        <input type="number" name="day" placeholder="ရက် (1-31)" min="1" max="31" required>
+      </div>
+    </fieldset>
+
+    <fieldset class="field-group">
+      <legend>မွေးချိန် (24-hr, ဒေသစံတော်ချိန်)</legend>
+      <div class="inline-fields">
+        <input type="number" name="hour" placeholder="နာရီ (0-23)" min="0" max="23" required>
+        <input type="number" name="minute" placeholder="မိနစ်" min="0" max="59" required>
+        <input type="number" name="second" placeholder="စက္ကန့် (optional)" min="0" max="59" value="0">
+      </div>
+    </fieldset>
+
+    <div class="field">
+      <label>မြို့ (preset)</label>
+      <select id="city-select" onchange="fillCity(this.value)">
+        {% for name in cities %}
+        <option value="{{ name }}">{{ name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <fieldset class="field-group">
+      <legend>တည်နေရာ (Latitude / Longitude) နှင့် Time Zone</legend>
+      <div class="inline-fields">
+        <input type="number" step="0.0001" id="latitude" name="latitude" placeholder="Latitude" value="16.8409" required>
+        <input type="number" step="0.0001" id="longitude" name="longitude" placeholder="Longitude" value="96.1735" required>
+        <input type="number" step="0.25" id="tz_offset_hours" name="tz_offset_hours" placeholder="UTC offset (hr)" value="6.5" required>
+      </div>
+    </fieldset>
+
+    <div class="field">
+      <label>Ayanamsa</label>
+      <select name="ayanamsa">
+        <option value="lahiri" selected>Lahiri (MOTAA/ Myanmar စံ)</option>
+        <option value="raman">Raman</option>
+        <option value="krishnamurti">Krishnamurti (KP)</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>ရာဟု/ကိတ် တွက်နည်း</label>
+      <select name="node_mode">
+        <option value="mean" selected>Mean Node (ရိုးရာ)</option>
+        <option value="true">True Node</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>ဘာဝ စံနစ် (House System)</label>
+      <select name="house_system">
+        {% for key, label in house_systems %}
+        <option value="{{ key }}" {{ 'selected' if key=='bhava_madhya' }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <button type="submit" class="btn-primary">ဇာတာ တွက်မည်</button>
+  </form>
+</div>
+
+<script>
+const CITY_DATA = {
+  {% for name, coords in cities.items() %}
+  "{{ name }}": [{{ coords[0] if coords[0] is not none else 'null' }}, {{ coords[1] if coords[1] is not none else 'null' }}, {{ coords[2] }}],
+  {% endfor %}
+};
+function fillCity(name) {
+  const c = CITY_DATA[name];
+  if (!c || c[0] === null) return;
+  document.getElementById('latitude').value = c[0];
+  document.getElementById('longitude').value = c[1];
+  document.getElementById('tz_offset_hours').value = c[2];
+}
+</script>
+{% endblock %}

@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="result-header">
+  <div>
+    <h1>{{ chart.input.name }} ၏ ဇာတာ</h1>
+    <p class="muted">
+      {{ chart.local_dt.strftime('%Y-%m-%d %H:%M:%S') }} ({{ "%.2f"|format(chart.input.tz_offset_hours) }} UTC) ·
+      Lat {{ "%.4f"|format(chart.input.latitude) }}, Lon {{ "%.4f"|format(chart.input.longitude) }} ·
+      Ayanamsa: {{ chart.input.ayanamsa|capitalize }} ({{ "%.4f"|format(chart.ayanamsa_value) }}°)
+    </p>
+    <p class="lagna-line">လဂ် — <strong>{{ chart.lagna_rashi_mm }}</strong> {{ "%.4f"|format(chart.lagna_lon % 30) }}° ·
+      ဘာဝစနစ်: {{ chart.input.house_system }}</p>
+  </div>
+  <div class="actions">
+    <a href="{{ url_for('pdf') }}" class="btn-primary">PDF ဒေါင်းလုဒ်</a>
+    <a href="{{ url_for('index') }}" class="btn-secondary">ပြန်တွက်ရန်</a>
+  </div>
+</div>
+
+<section class="card">
+  <h2>ဇာတာ ဇယား</h2>
+  <div class="chart-tabs">
+    <button type="button" class="chart-tab active" data-target="chart-rashi">ရာသီ</button>
+    <button type="button" class="chart-tab" data-target="chart-bhava">ဘာဝ</button>
+    <button type="button" class="chart-tab" data-target="chart-navamsa">နဝင်း (D9)</button>
+  </div>
+  <div id="chart-rashi" class="chart-panel">{{ chart_svgs.rashi|safe }}</div>
+  <div id="chart-bhava" class="chart-panel" style="display:none">{{ chart_svgs.bhava|safe }}</div>
+  <div id="chart-navamsa" class="chart-panel" style="display:none">{{ chart_svgs.navamsa|safe }}</div>
+  <p class="muted small">ရာသီ ဇယား = ရာသီ (whole-sign) အလိုက် တန့်များ။ ဘာဝ ဇယား = ရွေးထားသော ဘာဝစနစ် ({{ chart.input.house_system }}) ဖြင့် တွက်ထားသော တန့်များ (ရာသီ ဇယားနှင့် အနည်းငယ် ကွဲနိုင်သည်)။ နဝင်း = D9 စိတ္တဇာတာ။</p>
+</section>
+
+<script>
+document.querySelectorAll('.chart-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.chart-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.chart-panel').forEach(p => p.style.display = 'none');
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.target).style.display = 'block';
+  });
+});
+</script>
+
+<section class="card">
+  <h2>ဂြိုဟ် အင်အား (PlanetStrength — MOTAA Step 1-6)</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr>
+      <th>ဂြိုဟ်</th><th>ရာသီ</th><th>တန့်</th><th>ကာရက</th>
+      <th>S1</th><th>S2</th><th>S3</th><th>S4</th><th>S5</th><th>S6</th>
+      <th>နောက်ဆုံး</th><th>အဆင့်</th>
+    </tr></thead>
+    <tbody>
+      {% for name in GRAHA9 %}
+      {% set gp = chart.positions[name] %}
+      <tr class="{{ 'papa' if gp.karaka=='Papa' else 'soma' }}">
+        <td>{{ GRAHA_MM[name] }}</td>
+        <td>{{ RASHI_MM[gp.rashi_idx-1] }}</td>
+        <td>{{ gp.house }}</td>
+        <td>{{ 'ပါပ' if gp.karaka=='Papa' else 'သောမ' }}</td>
+        <td>{{ '%.0f%%'|format(gp.step1*100) if gp.step1 is not none else '-' }}</td>
+        <td>{{ '%.0f%%'|format(gp.step2*100) }}</td>
+        <td>{{ '%.0f%%'|format(gp.step3*100) if gp.step3 is not none else '-' }}</td>
+        <td>{{ '%.0f%%'|format(gp.step4*100) if gp.step4 is not none else '-' }}</td>
+        <td>{{ '%.0f%%'|format(gp.step5*100) }}</td>
+        <td>{{ '%.0f%%'|format(gp.step6*100) }}</td>
+        <td class="strong">{{ '%.0f%%'|format(gp.final*100) }}</td>
+        <td>{{ gp.label }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="card">
+  <h2>ဘာဝ လွှမ်းမိုးမှု (BhavaInfluence)</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr>
+      <th>တန့်</th><th>ရာသီ</th><th>ပိုင်ရှင်</th><th>သောမ/ပါပ</th>
+      <th>ဘာဝ ကိုယ်ပိုင် အင်အား</th><th>ဂြိုဟ်ကောင်း (+)</th><th>ဂြိုဟ်ဆိုး (−)</th><th>စုစုပေါင်း</th>
+    </tr></thead>
+    <tbody>
+      {% for row in chart.bhavas %}
+      <tr>
+        <td>{{ row.house }}</td>
+        <td>{{ row.rashi_name }}</td>
+        <td>{{ GRAHA_MM[row.lord] }}</td>
+        <td>{{ 'ပါပ' if row.karaka=='Papa' else 'သောမ' }}</td>
+        <td>{{ '%.0f%%'|format(row.own_strength*100) }}</td>
+        <td class="pos">{{ '%.0f%%'|format(row.positive_influence*100) }}</td>
+        <td class="neg">{{ '%.0f%%'|format(row.negative_influence*100) }}</td>
+        <td class="strong">{{ '%.0f%%'|format(row.net_influence*100) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="card">
+  <h2>ဝိသောတရီ ဒသာ (Vimshottari Dasha)</h2>
+  {% if chart.dasha_now.maha %}
+  <p class="now-running">လက်ရှိ ဒသာ — <strong>{{ GRAHA_MM[chart.dasha_now.maha.lord] }} မဟာဒသာ</strong>
+    / <strong>{{ GRAHA_MM[chart.dasha_now.antar.lord] }} အန္တရ</strong>
+    ({{ chart.dasha_now.antar.start.strftime('%Y-%m-%d') }} – {{ chart.dasha_now.antar.end.strftime('%Y-%m-%d') }})</p>
+  {% endif %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>မဟာဒသာ</th><th>အစ</th><th>အဆုံး</th><th>နှစ်ပေါင်း</th><th>အန္တရများ</th></tr></thead>
+    <tbody>
+      {% for md in chart.dasha_sequence %}
+      <tr>
+        <td>{{ GRAHA_MM[md.lord] }}</td>
+        <td>{{ md.start.strftime('%Y-%m-%d') }}</td>
+        <td>{{ md.end.strftime('%Y-%m-%d') }}</td>
+        <td>{{ '%.2f'|format(md.years) }}</td>
+        <td>
+          <details>
+            <summary>ကြည့်ရန်</summary>
+            <table class="sub-table">
+              {% for ad in md.antardashas %}
+              <tr><td>{{ GRAHA_MM[ad.lord] }}</td><td>{{ ad.start.strftime('%Y-%m-%d') }}</td><td>{{ ad.end.strftime('%Y-%m-%d') }}</td></tr>
+              {% endfor %}
+            </table>
+          </details>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+{% endblock %}
