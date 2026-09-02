@@ -153,27 +153,22 @@ def polygon_to_svg_points(poly: List[Point]) -> str:
 
 def render_diamond_svg(house_content: Dict[int, dict], center_label: str = "",
                         box: float = 300.0,
-                        font_family: str = "'Masterpiece Uni Round','Myanmar Text',sans-serif",
-                        position_labels: Dict[int, str] = None) -> str:
+                        font_family: str = "'Masterpiece Uni Round','Myanmar Text',sans-serif") -> str:
     """
     house_content: {grid_position: {"rashi": str, "lagna": bool,
     "planets": [name, ...]}} for each of the 12 fixed grid slots (1 =
-    top-middle, going counter-clockwise). The rashi name is drawn small,
-    tucked into the slot's own outer corner (alongside its number/house
-    label) so it reads as a reference tag rather than competing with the
-    planet names, which get the slot's full center and are what the eye
-    should land on first.
+    top-middle, going counter-clockwise). Only "planets" is drawn — the
+    lagna itself is just an entry in that same list (its own code, e.g.
+    "လဂ်"), so no separate marker or styling is needed for it. "rashi" and
+    "lagna" are kept in the data (some callers still use them, e.g. to
+    pick which grid slot a value belongs on) but not rendered — an
+    earlier version drew the rashi name and a grid/house number as a
+    small tag in each slot's corner, which read as clutter more than as
+    useful reference.
     center_label: short text (e.g. "ရာသီ"/"ဘာဝ"/"နဝင်း (D9)") shown in the
     unused center cell — just the chart type, not the person's name.
-    position_labels: optional {grid_position: label} for the small number
-    in that same corner. Defaults to the grid position itself (1-12) —
-    pass this to show something else instead, e.g. each slot's *house*
-    number in a Bhava chart, which (unlike the slot's rashi) moves around
-    the fixed grid depending on where the lagna falls.
     Returns a standalone <svg>...</svg> string.
     """
-    position_labels = position_labels or {}
-    polys = house_polygons(box)
     parts = [f'<svg viewBox="0 0 {box} {box}" xmlns="http://www.w3.org/2000/svg" '
               f'style="font-family:{font_family};max-width:100%;height:auto;">']
     parts.append(f'<rect x="0" y="0" width="{box}" height="{box}" '
@@ -201,44 +196,26 @@ def render_diamond_svg(house_content: Dict[int, dict], center_label: str = "",
         parts.append(f'<text x="{cx + cw/2:.1f}" y="{cy + ch/2 + 4:.1f}" text-anchor="middle" '
                       f'font-size="13" font-weight="700" fill="#4f33cc">{_esc(center_label)}</text>')
 
-    # house numbers + rashi tag (small, corner) + planets (large, centered)
+    # planets (and the lagna marker among them) — centered, and all styled
+    # identically (same size/weight/color) regardless of position in the
+    # list, so a multi-planet house doesn't have one line standing out in
+    # a different color from the rest. No rashi name or house/grid number
+    # is drawn in the house any more — see house_content's own "rashi"
+    # field if that's ever needed again.
     for h in range(1, 13):
-        poly = polys[h]
         entry = house_content.get(h) or {}
         planets = entry.get("planets", [])
-        rashi = entry.get("rashi", "")
-        is_lagna = bool(entry.get("lagna"))
         n = len(planets)
         pad = box * 0.03
 
-        # --- planets: the main, centered content ---
-        line_h, size_head, size_body, pull = text_layout_for_lines(n, box)
+        line_h, size_head, _size_body, pull = text_layout_for_lines(n, box)
         anchor_x, anchor_y = house_label_anchor(h, box, pull=pull)
         start_y = anchor_y - (n - 1) * line_h / 2.0
         start_y = max(pad, min(start_y, box - pad - max(n - 1, 0) * line_h))
         for i, name in enumerate(planets):
             y = start_y + i * line_h
-            weight = "700" if i == 0 else "500"
-            size = size_head if i == 0 else size_body
-            color = "#4f33cc" if i == 0 else "#1f2430"
             parts.append(f'<text x="{anchor_x:.1f}" y="{y:.1f}" text-anchor="middle" '
-                          f'font-size="{size:.1f}" font-weight="{weight}" fill="{color}">{_esc(name)}</text>')
-
-        # --- small corner tag: number/house label, then the rashi name
-        # below it — pull=0.78 keeps it well past the planets' own pull
-        # (capped at 0.60 above) so the two never collide even in a
-        # crowded house, while staying inside the polygon (unlike the
-        # unclamped very-tip point an earlier version used, which let a
-        # sibling pair's tags land on literally the same pixel) ---
-        tag_x, tag_y = _corner_point(h, poly, box, pull=0.78)
-        tag_lines = [str(position_labels.get(h, h)), rashi]
-        tag_start_y = max(pad, min(tag_y, box - pad - 9.0))
-        for i, t in enumerate(tag_lines):
-            y = tag_start_y + i * 9.0
-            color = "#7c6fd1" if (i == 1 and is_lagna) else "#9ca3af"
-            weight = "700" if (i == 1 and is_lagna) else "400"
-            parts.append(f'<text x="{tag_x:.1f}" y="{y:.1f}" text-anchor="middle" '
-                          f'font-size="7.5" font-weight="{weight}" fill="{color}">{_esc(t)}</text>')
+                          f'font-size="{size_head:.1f}" font-weight="500" fill="#1f2430">{_esc(name)}</text>')
 
     parts.append("</svg>")
     return "".join(parts)

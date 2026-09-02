@@ -28,8 +28,7 @@ from reportlab.graphics.shapes import Drawing, Polygon, Line, String
 from reportlab.graphics import renderPM
 
 from astro.constants import GRAHA_MM, RASHI_MM, GRAHA9
-from astro.chart_svg import (house_polygons, house_label_anchor, center_box,
-                              text_layout_for_lines, _corner_point)
+from astro.chart_svg import house_polygons, house_label_anchor, center_box, text_layout_for_lines
 
 _APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -102,6 +101,20 @@ def _dms(value: float, pos_dir: str, neg_dir: str) -> str:
     return f"{deg}:{minute:02d}:{sec:02d} {direction}"
 
 
+def _dms_sym(value: float) -> str:
+    """Format an unsigned decimal-degree float (e.g. an ayanamsa value) as
+    "dd°mm'ss\"" — no direction letter, since it isn't a coordinate."""
+    deg = int(value)
+    minute_full = (value - deg) * 60.0
+    minute = int(minute_full)
+    sec = round((minute_full - minute) * 60.0)
+    if sec == 60:
+        sec, minute = 0, minute + 1
+    if minute == 60:
+        minute, deg = 0, deg + 1
+    return f"{deg}°{minute:02d}'{sec:02d}\""
+
+
 def _diamond_drawing(house_content, title, box=260):
     """Builds a reportlab Drawing of the Myanmar-style diamond chart, reusing
     the exact same geometry as the web SVG version (astro/chart_svg.py)."""
@@ -122,42 +135,30 @@ def _diamond_drawing(house_content, title, box=260):
                      fillColor=colors.HexColor("#fffdf7"))
         d.add(p)
 
-    for h, poly in polys.items():
+    # planets (and the lagna marker among them) — centered, and all styled
+    # identically (same size/weight/color) regardless of position in the
+    # list, so a multi-planet house doesn't have one line standing out in
+    # a different color from the rest. No rashi name or house number is
+    # drawn any more. Crowded (3+ planet) houses get smaller text and
+    # lean further toward their triangle's outer tip, so the block
+    # shrinks and moves away from the shared diagonal instead of
+    # overlapping the neighboring house's text (see
+    # chart_svg.text_layout_for_lines).
+    for h in range(1, 13):
         entry = house_content.get(h) or {}
         planets = entry.get("planets", [])
-        rashi = entry.get("rashi", "")
-        is_lagna = bool(entry.get("lagna"))
         n = len(planets)
         pad = box * 0.03
 
-        # --- planets: the main, centered content. Crowded (3+ planet)
-        # houses get smaller text and lean further toward their triangle's
-        # outer tip, so the block shrinks and moves away from the shared
-        # diagonal instead of overlapping the neighboring house's text
-        # (see chart_svg.text_layout_for_lines) ---
-        line_h, size_head, size_body, pull = text_layout_for_lines(n, box)
+        line_h, size_head, _size_body, pull = text_layout_for_lines(n, box)
         ax, ay = house_label_anchor(h, box, pull=pull)
         start_y = ay + (n - 1) * line_h / 2.0
         start_y = min(start_y, box - pad)
         start_y = max(start_y, pad + max(n - 1, 0) * line_h)
         for i, name in enumerate(planets):
             y = start_y - i * line_h
-            size = size_head if i == 0 else size_body
-            color = colors.HexColor("#4f33cc") if i == 0 else colors.HexColor("#1f2430")
-            d.add(String(ax, flip(y), name, fontName=FONT_NAME, fontSize=size,
-                          fillColor=color, textAnchor="middle"))
-
-        # --- small corner tag: house number, then the rashi name below
-        # it (kept well past the planets' own pull, capped at 0.60 above,
-        # so the two never collide even in a crowded house) ---
-        tx, ty = _corner_point(h, poly, box, pull=0.78)
-        tag_start_y = min(ty, box - pad)
-        tag_start_y = max(tag_start_y, pad + 6.5)
-        for i, t in enumerate([str(h), rashi]):
-            y = tag_start_y - i * 6.5
-            color = colors.HexColor("#7c6fd1") if (i == 1 and is_lagna) else colors.HexColor("#9ca3af")
-            d.add(String(tx, flip(y), t, fontName=FONT_NAME, fontSize=6.0,
-                          fillColor=color, textAnchor="middle"))
+            d.add(String(ax, flip(y), name, fontName=FONT_NAME, fontSize=size_head,
+                          fillColor=colors.HexColor("#1f2430"), textAnchor="middle"))
     return d
 
 
@@ -176,7 +177,7 @@ def generate_pdf(chart, diamonds=None) -> io.BytesIO:
             f"(UTC{'+' if binput.tz_offset_hours >= 0 else ''}{binput.tz_offset_hours}) &nbsp;·&nbsp; "
             f"{location_bit}"
             f"Lat {_dms(binput.latitude, 'N', 'S')}, Lon {_dms(binput.longitude, 'E', 'W')} &nbsp;·&nbsp; "
-            f"Ayanamsa: {binput.ayanamsa} ({chart['ayanamsa_value']:.4f}&deg;) &nbsp;·&nbsp; "
+            f"Ayanamsa: {binput.ayanamsa} ({_dms_sym(chart['ayanamsa_value'])}) &nbsp;·&nbsp; "
             f"House system: {binput.house_system}")
     story.append(Paragraph(meta, muted))
     story.append(Paragraph(f"လဂ် — <b>{chart['lagna_rashi_mm']}</b> {chart['lagna_lon'] % 30:.4f}&deg;", body))

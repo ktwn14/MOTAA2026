@@ -73,6 +73,20 @@ def _decimal_to_dms(value: float, pos_dir: str, neg_dir: str) -> str:
     return f"{deg}:{minute:02d}:{sec:02d} {direction}"
 
 
+def _decimal_to_dms_symbols(value: float) -> str:
+    """Format an unsigned decimal-degree float (e.g. an ayanamsa value) as
+    "dd°mm'ss\"" — no direction letter, since it isn't a coordinate."""
+    deg = int(value)
+    minute_full = (value - deg) * 60.0
+    minute = int(minute_full)
+    sec = round((minute_full - minute) * 60.0)
+    if sec == 60:
+        sec, minute = 0, minute + 1
+    if minute == 60:
+        minute, deg = 0, deg + 1
+    return f"{deg}°{minute:02d}'{sec:02d}\""
+
+
 def _chart_to_session_input(form) -> BirthInput:
     hsys = form.get("house_system", "bhava_madhya")
     if hsys not in HOUSE_SYSTEMS:
@@ -93,6 +107,7 @@ def _chart_to_session_input(form) -> BirthInput:
 
 
 app.jinja_env.globals["dms"] = _decimal_to_dms
+app.jinja_env.globals["dms_sym"] = _decimal_to_dms_symbols
 
 
 @app.route("/", methods=["GET"])
@@ -127,8 +142,7 @@ def calculate():
     diamonds = build_diamond_chart_data(chart)
     chart_svgs = {
         "rashi": render_diamond_svg(diamonds["rashi"], center_label="ရာသီ"),
-        "bhava": render_diamond_svg(diamonds["bhava"], center_label="ဘာဝ",
-                                     position_labels=diamonds["bhava_position_labels"]),
+        "bhava": render_diamond_svg(diamonds["bhava"], center_label="ဘာဝ"),
         "navamsa": render_diamond_svg(diamonds["navamsa"], center_label="နဝင်း (D9)"),
     }
 

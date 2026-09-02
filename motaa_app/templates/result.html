@@ -8,7 +8,7 @@
       {{ chart.local_dt.strftime('%Y-%m-%d %H:%M:%S') }} ({{ "%.2f"|format(chart.input.tz_offset_hours) }} UTC)
       {%- if chart.input.location_name %} · {{ chart.input.location_name }}{% endif %} ·
       Lat {{ dms(chart.input.latitude, 'N', 'S') }}, Lon {{ dms(chart.input.longitude, 'E', 'W') }} ·
-      Ayanamsa: {{ chart.input.ayanamsa|capitalize }} ({{ "%.4f"|format(chart.ayanamsa_value) }}°)
+      Ayanamsa: {{ chart.input.ayanamsa|capitalize }} ({{ dms_sym(chart.ayanamsa_value) }})
     </p>
     <p class="lagna-line">လဂ် — <strong>{{ chart.lagna_rashi_mm }}</strong> {{ "%.4f"|format(chart.lagna_lon % 30) }}° ·
       ဘာဝစနစ်: {{ chart.input.house_system }}</p>

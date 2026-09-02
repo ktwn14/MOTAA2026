@@ -129,13 +129,10 @@ def build_diamond_chart_data(chart: dict):
     # slot) but each planet is grouped by its *house* under the chosen
     # house system (bhavas[gp.house - 1].rashi_idx — the fixed slot that
     # house currently occupies, which shifts around the wheel with the
-    # lagna). bhava_position_labels carries the house *number* to show at
-    # each fixed slot (also lagna-relative, so "house 1" is wherever the
-    # lagna's own rashi is, not always the top-middle slot).
+    # lagna).
     bhava_content = _empty_slots()
     for h in range(1, 13):
         bhava_content[h]["rashi"] = RASHI_MM[h - 1]
-    bhava_position_labels = {row.rashi_idx: row.house for row in bhavas}
     for name in GRAHA9:
         gp = positions[name]
         grid_pos = bhavas[gp.house - 1].rashi_idx
@@ -163,7 +160,4 @@ def build_diamond_chart_data(chart: dict):
     nav_content[nav_lagna_idx]["planets"].insert(0, LAGNA_SHORT)
     nav_content[nav_lagna_idx]["lagna"] = True
 
-    return {
-        "rashi": rashi_content, "bhava": bhava_content, "navamsa": nav_content,
-        "bhava_position_labels": bhava_position_labels,
-    }
+    return {"rashi": rashi_content, "bhava": bhava_content, "navamsa": nav_content}
