@@ -10,7 +10,8 @@ from typing import Optional
 from . import ephemeris
 from . import motaa
 from . import dasha
-from .constants import GRAHA9, GRAHA_MM, RASHI_MM
+from .constants import (GRAHA9, GRAHA_MM, GRAHA_SHORT, RASHI_MM,
+                         OUTER_PLANETS, OUTER_PLANET_SHORT, LAGNA_SHORT)
 
 
 @dataclass
@@ -42,6 +43,7 @@ def build_chart(binput: BirthInput):
     grahas = eph["grahas"]
     lagna_lon = eph["lagna"]
     cusps = eph["cusps"]
+    outer_grahas = ephemeris.outer_planet_positions(eph["jd_ut"])
 
     positions, bhavas, rashi_matrix, house_matrix = motaa.compute_all(grahas, lagna_lon, cusps)
 
@@ -64,6 +66,7 @@ def build_chart(binput: BirthInput):
         "lagna_rashi_mm": RASHI_MM[lagna_rashi_idx - 1],
         "cusps": cusps,
         "grahas": grahas,
+        "outer_grahas": outer_grahas,
         "positions": positions,
         "bhavas": bhavas,
         "dasha_sequence": seq,
@@ -77,17 +80,30 @@ def _empty_slots():
     return {h: {"rashi": "", "lagna": False, "planets": []} for h in range(1, 13)}
 
 
+def _amsa_lipta_tag(code: str, lon: float) -> str:
+    """"<code> <degree>°<minute>'" — used only on the Rashi chart, where
+    there's room (and reason) to show exactly where in the sign a planet
+    sits, not just which sign."""
+    amsa, lipta = motaa.amsa_lipta(lon)
+    return f"{code} {amsa}°{lipta}'"
+
+
 def build_diamond_chart_data(chart: dict):
     """Prepares house_content dicts for the 3 diamond-chart displays
     (Rashi / Bhava / Navamsa), each as {house_number: {"rashi": name,
     "lagna": bool, "planets": [name, ...]}} — see astro/chart_svg.py's
     render_diamond_svg for how this is drawn (rashi name small in the
-    slot's corner, planets large and centered)."""
-    from .constants import GRAHA_MM, RASHI_MM
-
+    slot's corner, planets large and centered). Planets use their short
+    numeral code (GRAHA_SHORT), not the full GRAHA_MM name, to leave room
+    in these small cells; the outer planets (Uranus/Neptune/Pluto) are
+    added as plain reference points (short code "U"/"N"/"P" only — no
+    MOTAA strength/dasha math applies to them)."""
     positions = chart["positions"]
     bhavas = chart["bhavas"]
+    cusps = chart["cusps"]
+    outer_grahas = chart["outer_grahas"]
     lagna_rashi_idx = chart["lagna_rashi_idx"]
+    lagna_lon = chart["lagna_lon"]
 
     # --- Rashi chart: FIXED rashi positions (Mesha/Aries always at the
     # top-middle grid slot, then Vrishabha/Taurus, Mithuna/Gemini, ... going
@@ -100,7 +116,12 @@ def build_diamond_chart_data(chart: dict):
         rashi_content[h]["rashi"] = RASHI_MM[h - 1]
     for name in GRAHA9:
         gp = positions[name]
-        rashi_content[gp.rashi_idx]["planets"].append(GRAHA_MM[name])
+        rashi_content[gp.rashi_idx]["planets"].append(_amsa_lipta_tag(GRAHA_SHORT[name], gp.lon))
+    for name in OUTER_PLANETS:
+        lon = outer_grahas[name]
+        rashi_content[motaa.rashi_index(lon)]["planets"].append(
+            _amsa_lipta_tag(OUTER_PLANET_SHORT[name], lon))
+    rashi_content[lagna_rashi_idx]["planets"].insert(0, _amsa_lipta_tag(LAGNA_SHORT, lagna_lon))
     rashi_content[lagna_rashi_idx]["lagna"] = True
 
     # --- Bhava chart: same fixed-rashi grid as the Rashi chart above (the
@@ -118,7 +139,13 @@ def build_diamond_chart_data(chart: dict):
     for name in GRAHA9:
         gp = positions[name]
         grid_pos = bhavas[gp.house - 1].rashi_idx
-        bhava_content[grid_pos]["planets"].append(GRAHA_MM[name])
+        bhava_content[grid_pos]["planets"].append(GRAHA_SHORT[name])
+    for name in OUTER_PLANETS:
+        lon = outer_grahas[name]
+        house = motaa.bhava_of(lon, cusps)
+        grid_pos = bhavas[house - 1].rashi_idx
+        bhava_content[grid_pos]["planets"].append(OUTER_PLANET_SHORT[name])
+    bhava_content[lagna_rashi_idx]["planets"].insert(0, LAGNA_SHORT)
     bhava_content[lagna_rashi_idx]["lagna"] = True
 
     # --- Navamsa (D9) chart: same fixed-rashi convention as the Rashi
@@ -129,7 +156,11 @@ def build_diamond_chart_data(chart: dict):
         nav_content[h]["rashi"] = RASHI_MM[h - 1]
     for name in GRAHA9:
         nav_idx = chart["navamsa_grahas"][name]
-        nav_content[nav_idx]["planets"].append(GRAHA_MM[name])
+        nav_content[nav_idx]["planets"].append(GRAHA_SHORT[name])
+    for name in OUTER_PLANETS:
+        nav_idx = motaa.navamsa_rashi_index(outer_grahas[name])
+        nav_content[nav_idx]["planets"].append(OUTER_PLANET_SHORT[name])
+    nav_content[nav_lagna_idx]["planets"].insert(0, LAGNA_SHORT)
     nav_content[nav_lagna_idx]["lagna"] = True
 
     return {

@@ -151,8 +151,8 @@ def polygon_to_svg_points(poly: List[Point]) -> str:
     return " ".join(f"{x:.1f},{y:.1f}" for x, y in poly)
 
 
-def render_diamond_svg(house_content: Dict[int, dict], center_title: str = "",
-                        center_sub: str = "", box: float = 300.0,
+def render_diamond_svg(house_content: Dict[int, dict], center_label: str = "",
+                        box: float = 300.0,
                         font_family: str = "'Masterpiece Uni Round','Myanmar Text',sans-serif",
                         position_labels: Dict[int, str] = None) -> str:
     """
@@ -163,6 +163,8 @@ def render_diamond_svg(house_content: Dict[int, dict], center_title: str = "",
     label) so it reads as a reference tag rather than competing with the
     planet names, which get the slot's full center and are what the eye
     should land on first.
+    center_label: short text (e.g. "ရာသီ"/"ဘာဝ"/"နဝင်း (D9)") shown in the
+    unused center cell — just the chart type, not the person's name.
     position_labels: optional {grid_position: label} for the small number
     in that same corner. Defaults to the grid position itself (1-12) —
     pass this to show something else instead, e.g. each slot's *house*
@@ -193,13 +195,11 @@ def render_diamond_svg(house_content: Dict[int, dict], center_title: str = "",
         parts.append(f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" '
                       f'stroke="#2b2b2b" stroke-width="1.5"/>')
 
-    # center label
+    # center label — just the chart type (e.g. "ရာသီ"), nothing else
     cx, cy, cw, ch = center_box(box)
-    parts.append(f'<text x="{cx + cw/2:.1f}" y="{cy + ch/2 - 4:.1f}" text-anchor="middle" '
-                  f'font-size="13" font-weight="700" fill="#4f33cc">{_esc(center_title)}</text>')
-    if center_sub:
-        parts.append(f'<text x="{cx + cw/2:.1f}" y="{cy + ch/2 + 14:.1f}" text-anchor="middle" '
-                      f'font-size="10" fill="#6b7280">{_esc(center_sub)}</text>')
+    if center_label:
+        parts.append(f'<text x="{cx + cw/2:.1f}" y="{cy + ch/2 + 4:.1f}" text-anchor="middle" '
+                      f'font-size="13" font-weight="700" fill="#4f33cc">{_esc(center_label)}</text>')
 
     # house numbers + rashi tag (small, corner) + planets (large, centered)
     for h in range(1, 13):

@@ -126,13 +126,10 @@ def calculate():
 
     diamonds = build_diamond_chart_data(chart)
     chart_svgs = {
-        "rashi": render_diamond_svg(diamonds["rashi"], center_title=binput.name,
-                                     center_sub=f"ရာသီ ဇယား — {chart['lagna_rashi_mm']} လဂ်"),
-        "bhava": render_diamond_svg(diamonds["bhava"], center_title=binput.name,
-                                     center_sub="ဘာဝ ဇယား",
+        "rashi": render_diamond_svg(diamonds["rashi"], center_label="ရာသီ"),
+        "bhava": render_diamond_svg(diamonds["bhava"], center_label="ဘာဝ",
                                      position_labels=diamonds["bhava_position_labels"]),
-        "navamsa": render_diamond_svg(diamonds["navamsa"], center_title=binput.name,
-                                       center_sub="နဝင်း (D9) ဇယား"),
+        "navamsa": render_diamond_svg(diamonds["navamsa"], center_label="နဝင်း (D9)"),
     }
 
     return render_template(

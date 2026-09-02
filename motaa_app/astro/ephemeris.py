@@ -33,6 +33,10 @@ PLANET_IDS = {
     "Jupiter": swe.JUPITER, "Venus": swe.VENUS, "Saturn": swe.SATURN,
 }
 
+# Display-only outer planets (see constants.OUTER_PLANETS) — not part of
+# the classical 9-graha set above.
+OUTER_PLANET_IDS = {"Uranus": swe.URANUS, "Neptune": swe.NEPTUNE, "Pluto": swe.PLUTO}
+
 # House systems offered in the UI. "bhava_madhya" is MOTAA's own equal-house
 # system (Lagna = house-1 midpoint, computed directly, not via swe.houses_ex).
 # The rest map to real Swiss Ephemeris house-system codes (swe.houses_ex).
@@ -102,6 +106,16 @@ def sidereal_positions(jd_ut: float, node_mode: str = "mean") -> dict:
     xx = _calc(jd_ut, node_id, _CALC_FLAG)
     out["Rahu"] = xx[0] % 360.0
     out["Ketu"] = (xx[0] + 180.0) % 360.0
+    return out
+
+
+def outer_planet_positions(jd_ut: float) -> dict:
+    """Return {"Uranus": lon, "Neptune": lon, "Pluto": lon} in sidereal
+    degrees — display-only reference points, see constants.OUTER_PLANETS."""
+    out = {}
+    for name, pid in OUTER_PLANET_IDS.items():
+        xx = _calc(jd_ut, pid, _CALC_FLAG)
+        out[name] = xx[0] % 360.0
     return out
 
 
