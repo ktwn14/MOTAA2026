@@ -17,23 +17,12 @@ from flask import Flask, render_template, request, send_file, session, redirect,
 
 from astro.charts import BirthInput, build_chart, build_diamond_chart_data
 from astro.constants import GRAHA_MM, RASHI_MM, GRAHA9
-from astro.ephemeris import HOUSE_SYSTEMS
+from astro.ephemeris import HOUSE_SYSTEMS, HOUSE_SYSTEM_LABELS, HOUSE_SYSTEM_LABEL_MAP
 from astro.chart_svg import render_diamond_svg
 from reports.pdf_report import generate_pdf
 
 app = Flask(__name__)
 app.secret_key = "motaa-dev-secret-change-me"   # change this if you deploy beyond localhost
-
-HOUSE_SYSTEM_LABELS = [
-    ("bhava_madhya", "ဘာဝစနစ် (MOTAA Bhava-Madhya)"),
-    ("vequal", "VEqual (Vehlow Equal)"),
-    ("equal", "Equal"),
-    ("placidus", "Placidus"),
-    ("koch", "Koch"),
-    ("porphyrius", "Porphyrius"),
-    ("regiomontanus", "Regiomontanus"),
-    ("campanus", "Campanus"),
-]
 
 CITY_PRESETS = {
     "ရန်ကုန် (Yangon)": (16.8409, 96.1735, 6.5),
@@ -108,6 +97,7 @@ def _chart_to_session_input(form) -> BirthInput:
 
 app.jinja_env.globals["dms"] = _decimal_to_dms
 app.jinja_env.globals["dms_sym"] = _decimal_to_dms_symbols
+app.jinja_env.globals["house_system_label"] = lambda key: HOUSE_SYSTEM_LABEL_MAP.get(key, key)
 
 
 @app.route("/", methods=["GET"])

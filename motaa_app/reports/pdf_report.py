@@ -29,10 +29,12 @@ from reportlab.graphics import renderPM
 
 from astro.constants import GRAHA_MM, RASHI_MM, GRAHA9
 from astro.chart_svg import house_polygons, house_label_anchor, center_box, text_layout_for_lines
+from astro.ephemeris import HOUSE_SYSTEM_LABEL_MAP
 
 _APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 FONT_NAME = "Helvetica"
+FONT_NAME_BOLD = "Helvetica-Bold"
 _CANDIDATE_FONTS = [
     # If you have "Masterpiece Uni Round" installed, point at its .ttf here
     # (Font Book usually installs to ~/Library/Fonts or /Library/Fonts) to
@@ -50,22 +52,43 @@ _CANDIDATE_FONTS = [
     "/usr/share/fonts/truetype/noto/NotoSansMyanmar-Regular.ttf",  # Linux (Noto)
     "/usr/share/fonts/truetype/padauk/Padauk.ttf",            # Linux (Padauk)
 ]
+_CANDIDATE_FONTS_BOLD = [
+    os.path.expanduser("~/Library/Fonts/MasterpieceUniRound-Bold.ttf"),
+    "/Library/Fonts/MasterpieceUniRound-Bold.ttf",
+    os.path.join(_APP_DIR, "static", "fonts", "Padauk-Bold.ttf"),
+    "/usr/share/fonts/truetype/noto/NotoSansMyanmar-Bold.ttf",
+    "/usr/share/fonts/truetype/padauk/Padauk-Bold.ttf",
+]
 
 
 def _register_myanmar_font():
-    global FONT_NAME
+    global FONT_NAME, FONT_NAME_BOLD
     for path in _CANDIDATE_FONTS:
         if os.path.exists(path):
             try:
                 pdfmetrics.registerFont(TTFont("MyanmarFont", path))
                 FONT_NAME = "MyanmarFont"
+                break
+            except Exception:
+                continue
+    else:
+        print("[pdf_report] WARNING: no Myanmar-capable font found on this system — "
+              "Myanmar text in the PDF will not render correctly. Install 'Noto Sans "
+              "Myanmar' or 'Padauk' and add its path to _CANDIDATE_FONTS in "
+              "reports/pdf_report.py.")
+
+    for path in _CANDIDATE_FONTS_BOLD:
+        if os.path.exists(path):
+            try:
+                pdfmetrics.registerFont(TTFont("MyanmarFont-Bold", path))
+                FONT_NAME_BOLD = "MyanmarFont-Bold"
                 return
             except Exception:
                 continue
-    print("[pdf_report] WARNING: no Myanmar-capable font found on this system — "
-          "Myanmar text in the PDF will not render correctly. Install 'Noto Sans "
-          "Myanmar' or 'Padauk' and add its path to _CANDIDATE_FONTS in "
-          "reports/pdf_report.py.")
+    # No true bold face found for whichever font matched above — reuse the
+    # regular one rather than silently falling back to Helvetica-Bold
+    # (which would render Myanmar text as boxes again).
+    FONT_NAME_BOLD = FONT_NAME
 
 
 _register_myanmar_font()
@@ -157,7 +180,7 @@ def _diamond_drawing(house_content, title, box=260):
         start_y = max(start_y, pad + max(n - 1, 0) * line_h)
         for i, name in enumerate(planets):
             y = start_y - i * line_h
-            d.add(String(ax, flip(y), name, fontName=FONT_NAME, fontSize=size_head,
+            d.add(String(ax, flip(y), name, fontName=FONT_NAME_BOLD, fontSize=size_head,
                           fillColor=colors.HexColor("#1f2430"), textAnchor="middle"))
     return d
 
@@ -178,7 +201,7 @@ def generate_pdf(chart, diamonds=None) -> io.BytesIO:
             f"{location_bit}"
             f"Lat {_dms(binput.latitude, 'N', 'S')}, Lon {_dms(binput.longitude, 'E', 'W')} &nbsp;·&nbsp; "
             f"Ayanamsa: {binput.ayanamsa} ({_dms_sym(chart['ayanamsa_value'])}) &nbsp;·&nbsp; "
-            f"House system: {binput.house_system}")
+            f"House system: {HOUSE_SYSTEM_LABEL_MAP.get(binput.house_system, binput.house_system)}")
     story.append(Paragraph(meta, muted))
     story.append(Paragraph(f"လဂ် — <b>{chart['lagna_rashi_mm']}</b> {chart['lagna_lon'] % 30:.4f}&deg;", body))
     story.append(Spacer(1, 10))

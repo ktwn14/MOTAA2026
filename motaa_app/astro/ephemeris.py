@@ -56,6 +56,21 @@ HOUSE_SYSTEMS = {
     # house system and its exact definition could not be verified; see README.
 }
 
+# Full (non-abbreviated) display name for each HOUSE_SYSTEMS key — shown in
+# the UI dropdown, the result page, and the PDF, so "vequal" always reads
+# as "VEqual (Vehlow Equal)" rather than the bare internal key.
+HOUSE_SYSTEM_LABELS = [
+    ("bhava_madhya", "ဘာဝစနစ် (MOTAA Bhava-Madhya)"),
+    ("vequal", "VEqual (Vehlow Equal)"),
+    ("equal", "Equal"),
+    ("placidus", "Placidus"),
+    ("koch", "Koch"),
+    ("porphyrius", "Porphyrius"),
+    ("regiomontanus", "Regiomontanus"),
+    ("campanus", "Campanus"),
+]
+HOUSE_SYSTEM_LABEL_MAP = dict(HOUSE_SYSTEM_LABELS)
+
 _CALC_FLAG = swe.FLG_MOSEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
 
 
@@ -95,28 +110,43 @@ def _calc(jd_ut: float, pid: int, flags: int):
     return xx
 
 
-def sidereal_positions(jd_ut: float, node_mode: str = "mean") -> dict:
-    """Return {"Sun": lon, ..., "Rahu": lon, "Ketu": lon} in sidereal degrees."""
-    out = {}
+def sidereal_positions_and_retrograde(jd_ut: float, node_mode: str = "mean"):
+    """Return ({"Sun": lon, ..., "Rahu": lon, "Ketu": lon}, {"Sun": bool, ...})
+    — sidereal longitude in degrees and whether that body's apparent daily
+    motion is retrograde (negative ecliptic-longitude speed, xx[3] from
+    calc_ut — _CALC_FLAG always includes FLG_SPEED). One calc_ut call per
+    body serves both dicts. Ketu mirrors Rahu (opposite point, same axis,
+    so the same direction of motion)."""
+    lons, retro = {}, {}
     for name, pid in PLANET_IDS.items():
         xx = _calc(jd_ut, pid, _CALC_FLAG)
-        out[name] = xx[0] % 360.0
+        lons[name] = xx[0] % 360.0
+        retro[name] = xx[3] < 0
 
     node_id = swe.TRUE_NODE if node_mode == "true" else swe.MEAN_NODE
     xx = _calc(jd_ut, node_id, _CALC_FLAG)
-    out["Rahu"] = xx[0] % 360.0
-    out["Ketu"] = (xx[0] + 180.0) % 360.0
-    return out
+    lons["Rahu"] = xx[0] % 360.0
+    lons["Ketu"] = (xx[0] + 180.0) % 360.0
+    retro["Rahu"] = retro["Ketu"] = xx[3] < 0
+    return lons, retro
 
 
-def outer_planet_positions(jd_ut: float) -> dict:
-    """Return {"Uranus": lon, "Neptune": lon, "Pluto": lon} in sidereal
-    degrees — display-only reference points, see constants.OUTER_PLANETS."""
-    out = {}
+def sidereal_positions(jd_ut: float, node_mode: str = "mean") -> dict:
+    """Return {"Sun": lon, ..., "Rahu": lon, "Ketu": lon} in sidereal degrees."""
+    lons, _retro = sidereal_positions_and_retrograde(jd_ut, node_mode)
+    return lons
+
+
+def outer_planet_data(jd_ut: float):
+    """Return ({"Uranus": lon, "Neptune": lon, "Pluto": lon}, {"Uranus":
+    bool, ...}) — sidereal longitude and retrograde flag for each
+    display-only reference planet, see constants.OUTER_PLANETS."""
+    lons, retro = {}, {}
     for name, pid in OUTER_PLANET_IDS.items():
         xx = _calc(jd_ut, pid, _CALC_FLAG)
-        out[name] = xx[0] % 360.0
-    return out
+        lons[name] = xx[0] % 360.0
+        retro[name] = xx[3] < 0
+    return lons, retro
 
 
 def sidereal_ascendant_and_cusps(jd_ut: float, lat: float, lon: float, hsys_code: bytes):
@@ -184,13 +214,14 @@ def compute_chart_longitudes(local_dt: datetime, tz_offset_hours: float,
     """One-stop convenience call used by astro/charts.py."""
     configure(ayanamsa)
     jd_ut = to_julian_ut(local_dt, tz_offset_hours)
-    grahas = sidereal_positions(jd_ut, node_mode=node_mode)
+    grahas, retrograde = sidereal_positions_and_retrograde(jd_ut, node_mode=node_mode)
     asc, cusps = house_cusps(jd_ut, lat, lon, hsys=hsys)
     ayan = get_ayanamsa(jd_ut)
     return {
         "jd_ut": jd_ut,
         "ayanamsa_value": ayan,
         "grahas": grahas,
+        "retrograde": retrograde,
         "lagna": asc,
         "cusps": cusps,
     }

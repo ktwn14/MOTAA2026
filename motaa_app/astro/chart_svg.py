@@ -215,7 +215,7 @@ def render_diamond_svg(house_content: Dict[int, dict], center_label: str = "",
         for i, name in enumerate(planets):
             y = start_y + i * line_h
             parts.append(f'<text x="{anchor_x:.1f}" y="{y:.1f}" text-anchor="middle" '
-                          f'font-size="{size_head:.1f}" font-weight="500" fill="#1f2430">{_esc(name)}</text>')
+                          f'font-size="{size_head:.1f}" font-weight="700" fill="#1f2430">{_esc(name)}</text>')
 
     parts.append("</svg>")
     return "".join(parts)

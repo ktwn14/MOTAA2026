@@ -30,12 +30,13 @@ GRAHA_MM = {
     "Rahu": "ရာဟု", "Ketu": "ကိတ်",
 }
 
-# Compact numeral code for each graha (classical Sun..Saturn=1..7 order,
-# Rahu=8, Ketu=9), used in the diamond charts where GRAHA_MM's full names
-# don't fit — the lagna's own short label is just "လဂ်" (no numeral).
+# Compact numeral code for each graha, used in the diamond charts where
+# GRAHA_MM's full names don't fit — the lagna's own short label is just
+# "လဂ်" (no numeral). Sun..Venus follow the classical 1..6 order; Saturn is
+# "0" rather than "7" per MOTAA's own convention, Rahu/Ketu are 8/9.
 GRAHA_SHORT = {
     "Sun": "၁", "Moon": "၂", "Mars": "၃", "Mercury": "၄", "Jupiter": "၅",
-    "Venus": "၆", "Saturn": "၇", "Rahu": "၈", "Ketu": "၉",
+    "Venus": "၆", "Saturn": "၀", "Rahu": "၈", "Ketu": "၉",
 }
 LAGNA_SHORT = "လဂ်"
 
