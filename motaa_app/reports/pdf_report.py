@@ -22,7 +22,8 @@ from reportlab.graphics.shapes import Drawing, Polygon, Line, String
 from reportlab.graphics import renderPM
 
 from astro.constants import GRAHA_MM, RASHI_MM, GRAHA9
-from astro.chart_svg import house_polygons, house_label_anchor, center_box, text_layout_for_lines
+from astro.chart_svg import (house_polygons, house_label_anchor, center_box,
+                              text_layout_for_lines, _corner_point)
 
 FONT_NAME = "Helvetica"
 _CANDIDATE_FONTS = [
@@ -108,24 +109,41 @@ def _diamond_drawing(house_content, title, box=260):
                      fillColor=colors.HexColor("#fffdf7"))
         d.add(p)
 
-    for h in range(1, 13):
-        lines = house_content.get(h, [])
-        n = len(lines)
-        # crowded (3+ planet) houses get smaller text and lean further
-        # toward their triangle's outer tip, so the block shrinks and moves
-        # away from the shared diagonal instead of overlapping the
-        # neighboring house's text (see chart_svg.text_layout_for_lines)
+    for h, poly in polys.items():
+        entry = house_content.get(h) or {}
+        planets = entry.get("planets", [])
+        rashi = entry.get("rashi", "")
+        is_lagna = bool(entry.get("lagna"))
+        n = len(planets)
+        pad = box * 0.03
+
+        # --- planets: the main, centered content. Crowded (3+ planet)
+        # houses get smaller text and lean further toward their triangle's
+        # outer tip, so the block shrinks and moves away from the shared
+        # diagonal instead of overlapping the neighboring house's text
+        # (see chart_svg.text_layout_for_lines) ---
         line_h, size_head, size_body, pull = text_layout_for_lines(n, box)
         ax, ay = house_label_anchor(h, box, pull=pull)
         start_y = ay + (n - 1) * line_h / 2.0
-        pad = box * 0.03
         start_y = min(start_y, box - pad)
         start_y = max(start_y, pad + max(n - 1, 0) * line_h)
-        for i, line in enumerate(lines):
+        for i, name in enumerate(planets):
             y = start_y - i * line_h
             size = size_head if i == 0 else size_body
             color = colors.HexColor("#4f33cc") if i == 0 else colors.HexColor("#1f2430")
-            d.add(String(ax, flip(y), line, fontName=FONT_NAME, fontSize=size,
+            d.add(String(ax, flip(y), name, fontName=FONT_NAME, fontSize=size,
+                          fillColor=color, textAnchor="middle"))
+
+        # --- small corner tag: house number, then the rashi name below
+        # it (kept well past the planets' own pull, capped at 0.60 above,
+        # so the two never collide even in a crowded house) ---
+        tx, ty = _corner_point(h, poly, box, pull=0.78)
+        tag_start_y = min(ty, box - pad)
+        tag_start_y = max(tag_start_y, pad + 6.5)
+        for i, t in enumerate([str(h), rashi]):
+            y = tag_start_y - i * 6.5
+            color = colors.HexColor("#7c6fd1") if (i == 1 and is_lagna) else colors.HexColor("#9ca3af")
+            d.add(String(tx, flip(y), t, fontName=FONT_NAME, fontSize=6.0,
                           fillColor=color, textAnchor="middle"))
     return d
 

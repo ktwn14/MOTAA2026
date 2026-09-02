@@ -81,33 +81,45 @@ def house_polygons(box: float = 300.0) -> Dict[int, List[Point]]:
 _CORNER_SIBLING = {2: 3, 3: 2, 5: 6, 6: 5, 8: 9, 9: 8, 11: 12, 12: 11}
 
 
-def house_label_anchor(house: int, box: float = 300.0, pull: float = 0.32) -> Point:
-    """A reasonable point to place text for a house. For the 4 plain
-    (rectangular) Kendra houses this is the simple centroid. For the 8
-    triangular corner houses, the centroid is pulled toward the polygon's
-    own vertex that is *not* shared with its sibling triangle (the other
-    house occupying the same corner cell) — `pull` controls how far (0 =
-    centroid, 1 = that vertex); callers with a crowded (many-planet) house
-    should pass a larger pull so that house's text leans further away from
-    the diagonal it shares with its sibling.
-
-    The two triangles in a corner cell always share the diagonal's two
-    endpoints and differ only in their third vertex, so pulling toward
+def _outer_vertex(house: int, poly: List[Point], box: float) -> Point:
+    """The vertex a house's text should lean toward. For a triangular
+    corner house this is the vertex *not* shared with its sibling triangle
+    (the other house occupying the same corner cell) — pulling toward
     "whichever vertex is furthest from the box center" (an earlier version
-    of this function) picks the *same* point — one of the diagonal's own
+    of this) picks the *same* point — one of the shared diagonal's own
     endpoints — for both siblings, which pulls a crowded house's text
-    toward its sibling instead of away from it. Pulling toward the vertex
-    unique to each triangle sends the two siblings apart instead."""
-    polys = house_polygons(box)
-    poly = polys[house]
+    toward its sibling instead of away from it. For a plain rectangular
+    Kendra house there's no sibling to avoid, so the furthest-from-center
+    vertex is simply that house's own natural "outer corner"."""
+    if len(poly) == 3:
+        sibling_poly = house_polygons(box)[_CORNER_SIBLING[house]]
+        return next(p for p in poly if p not in sibling_poly)
+    cx = cy = box / 2.0
+    return max(poly, key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
+
+
+def _corner_point(house: int, poly: List[Point], box: float, pull: float) -> Point:
+    """Blend of the polygon's centroid and its `_outer_vertex` — 0 = dead
+    centroid, 1 = right on that outer vertex."""
     cx = sum(p[0] for p in poly) / len(poly)
     cy = sum(p[1] for p in poly) / len(poly)
-    if len(poly) == 3:
-        sibling_poly = polys[_CORNER_SIBLING[house]]
-        outer = next(p for p in poly if p not in sibling_poly)
-        cx = cx * (1 - pull) + outer[0] * pull
-        cy = cy * (1 - pull) + outer[1] * pull
-    return cx, cy
+    ox, oy = _outer_vertex(house, poly, box)
+    return cx * (1 - pull) + ox * pull, cy * (1 - pull) + oy * pull
+
+
+def house_label_anchor(house: int, box: float = 300.0, pull: float = 0.32) -> Point:
+    """A reasonable point to place a house's *planet* text. For the 4 plain
+    (rectangular) Kendra houses this is the simple centroid (pull ignored —
+    they aren't split by a diagonal, so there's no crowding to lean away
+    from). For the 8 triangular corner houses, the centroid is pulled
+    toward `_outer_vertex` — `pull` controls how far (0 = centroid, 1 = that
+    vertex); callers with a crowded (many-planet) house should pass a
+    larger pull so that house's text leans further away from the diagonal
+    it shares with its sibling."""
+    poly = house_polygons(box)[house]
+    if len(poly) != 3:
+        return sum(p[0] for p in poly) / len(poly), sum(p[1] for p in poly) / len(poly)
+    return _corner_point(house, poly, box, pull)
 
 
 def text_layout_for_lines(n: int, box: float = 300.0) -> Tuple[float, float, float, float]:
@@ -139,19 +151,23 @@ def polygon_to_svg_points(poly: List[Point]) -> str:
     return " ".join(f"{x:.1f},{y:.1f}" for x, y in poly)
 
 
-def render_diamond_svg(house_content: Dict[int, List[str]], center_title: str = "",
+def render_diamond_svg(house_content: Dict[int, dict], center_title: str = "",
                         center_sub: str = "", box: float = 300.0,
                         font_family: str = "'Masterpiece Uni Round','Myanmar Text',sans-serif",
                         position_labels: Dict[int, str] = None) -> str:
     """
-    house_content: {grid_position: [line1, line2, ...]} — short text lines
-    (e.g. rashi name, then planet abbreviations) to place in each of the
-    12 fixed grid slots (1 = top-middle, going counter-clockwise).
+    house_content: {grid_position: {"rashi": str, "lagna": bool,
+    "planets": [name, ...]}} for each of the 12 fixed grid slots (1 =
+    top-middle, going counter-clockwise). The rashi name is drawn small,
+    tucked into the slot's own outer corner (alongside its number/house
+    label) so it reads as a reference tag rather than competing with the
+    planet names, which get the slot's full center and are what the eye
+    should land on first.
     position_labels: optional {grid_position: label} for the small number
-    shown near each slot's outer tip. Defaults to the grid position itself
-    (1-12) — pass this to show something else instead, e.g. each slot's
-    *house* number in a Bhava chart, which (unlike the slot's rashi) moves
-    around the fixed grid depending on where the lagna falls.
+    in that same corner. Defaults to the grid position itself (1-12) —
+    pass this to show something else instead, e.g. each slot's *house*
+    number in a Bhava chart, which (unlike the slot's rashi) moves around
+    the fixed grid depending on where the lagna falls.
     Returns a standalone <svg>...</svg> string.
     """
     position_labels = position_labels or {}
@@ -185,43 +201,47 @@ def render_diamond_svg(house_content: Dict[int, List[str]], center_title: str = 
         parts.append(f'<text x="{cx + cw/2:.1f}" y="{cy + ch/2 + 14:.1f}" text-anchor="middle" '
                       f'font-size="10" fill="#6b7280">{_esc(center_sub)}</text>')
 
-    # house numbers + content
+    # house numbers + rashi tag (small, corner) + planets (large, centered)
     for h in range(1, 13):
         poly = polys[h]
-        lines = house_content.get(h, [])
-        n = len(lines)
+        entry = house_content.get(h) or {}
+        planets = entry.get("planets", [])
+        rashi = entry.get("rashi", "")
+        is_lagna = bool(entry.get("lagna"))
+        n = len(planets)
+        pad = box * 0.03
+
+        # --- planets: the main, centered content ---
         line_h, size_head, size_body, pull = text_layout_for_lines(n, box)
         anchor_x, anchor_y = house_label_anchor(h, box, pull=pull)
-        # small label near the outer-most vertex of the polygon (house
-        # number for a Bhava chart, otherwise just the grid position)
-        num_x, num_y = _outer_label_point(h, poly, box)
-        label = position_labels.get(h, h)
-        parts.append(f'<text x="{num_x:.1f}" y="{num_y:.1f}" font-size="9" fill="#9ca3af">{label}</text>')
-
         start_y = anchor_y - (n - 1) * line_h / 2.0
-        pad = box * 0.03
         start_y = max(pad, min(start_y, box - pad - max(n - 1, 0) * line_h))
-        for i, line in enumerate(lines):
+        for i, name in enumerate(planets):
             y = start_y + i * line_h
             weight = "700" if i == 0 else "500"
             size = size_head if i == 0 else size_body
             color = "#4f33cc" if i == 0 else "#1f2430"
             parts.append(f'<text x="{anchor_x:.1f}" y="{y:.1f}" text-anchor="middle" '
-                          f'font-size="{size:.1f}" font-weight="{weight}" fill="{color}">{_esc(line)}</text>')
+                          f'font-size="{size:.1f}" font-weight="{weight}" fill="{color}">{_esc(name)}</text>')
+
+        # --- small corner tag: number/house label, then the rashi name
+        # below it — pull=0.78 keeps it well past the planets' own pull
+        # (capped at 0.60 above) so the two never collide even in a
+        # crowded house, while staying inside the polygon (unlike the
+        # unclamped very-tip point an earlier version used, which let a
+        # sibling pair's tags land on literally the same pixel) ---
+        tag_x, tag_y = _corner_point(h, poly, box, pull=0.78)
+        tag_lines = [str(position_labels.get(h, h)), rashi]
+        tag_start_y = max(pad, min(tag_y, box - pad - 9.0))
+        for i, t in enumerate(tag_lines):
+            y = tag_start_y + i * 9.0
+            color = "#7c6fd1" if (i == 1 and is_lagna) else "#9ca3af"
+            weight = "700" if (i == 1 and is_lagna) else "400"
+            parts.append(f'<text x="{tag_x:.1f}" y="{y:.1f}" text-anchor="middle" '
+                          f'font-size="7.5" font-weight="{weight}" fill="{color}">{_esc(t)}</text>')
 
     parts.append("</svg>")
     return "".join(parts)
-
-
-def _outer_label_point(house: int, poly: List[Point], box: float) -> Point:
-    """Small house-number placed near whichever polygon vertex is furthest
-    from the box center (i.e. the outer corner/edge of the chart)."""
-    cx = cy = box / 2.0
-    best = max(poly, key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
-    # nudge slightly inward so the digit isn't clipped by the border
-    nx = best[0] + (cx - best[0]) * 0.12
-    ny = best[1] + (cy - best[1]) * 0.12
-    return nx, ny
 
 
 def _esc(s: str) -> str:

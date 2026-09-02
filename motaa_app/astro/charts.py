@@ -73,11 +73,16 @@ def build_chart(binput: BirthInput):
     }
 
 
+def _empty_slots():
+    return {h: {"rashi": "", "lagna": False, "planets": []} for h in range(1, 13)}
+
+
 def build_diamond_chart_data(chart: dict):
     """Prepares house_content dicts for the 3 diamond-chart displays
-    (Rashi / Bhava / Navamsa), each as {house_number: [line1, line2, ...]}
-    with line1 = rashi (sign) name and following lines = planet abbreviations
-    placed in that house."""
+    (Rashi / Bhava / Navamsa), each as {house_number: {"rashi": name,
+    "lagna": bool, "planets": [name, ...]}} — see astro/chart_svg.py's
+    render_diamond_svg for how this is drawn (rashi name small in the
+    slot's corner, planets large and centered)."""
     from .constants import GRAHA_MM, RASHI_MM
 
     positions = chart["positions"]
@@ -88,13 +93,15 @@ def build_diamond_chart_data(chart: dict):
     # top-middle grid slot, then Vrishabha/Taurus, Mithuna/Gemini, ... going
     # around) — this shows each planet in its own natural sign, independent
     # of the lagna, unlike the Bhava chart below (which is lagna/house-
-    # system relative). The lagna itself is just a "(လဂ်)" marker placed
-    # into whichever grid slot its own rashi falls in.
-    rashi_content = {h: [RASHI_MM[h - 1]] for h in range(1, 13)}
+    # system relative). The lagna itself is just a marker on whichever grid
+    # slot its own rashi falls in.
+    rashi_content = _empty_slots()
+    for h in range(1, 13):
+        rashi_content[h]["rashi"] = RASHI_MM[h - 1]
     for name in GRAHA9:
         gp = positions[name]
-        rashi_content[gp.rashi_idx].append(GRAHA_MM[name])
-    rashi_content[lagna_rashi_idx].insert(0, "(လဂ်)")
+        rashi_content[gp.rashi_idx]["planets"].append(GRAHA_MM[name])
+    rashi_content[lagna_rashi_idx]["lagna"] = True
 
     # --- Bhava chart: same fixed-rashi grid as the Rashi chart above (the
     # rashi wheel itself never moves — Mesha/Aries is always the top-middle
@@ -104,22 +111,26 @@ def build_diamond_chart_data(chart: dict):
     # lagna). bhava_position_labels carries the house *number* to show at
     # each fixed slot (also lagna-relative, so "house 1" is wherever the
     # lagna's own rashi is, not always the top-middle slot).
-    bhava_content = {h: [RASHI_MM[h - 1]] for h in range(1, 13)}
+    bhava_content = _empty_slots()
+    for h in range(1, 13):
+        bhava_content[h]["rashi"] = RASHI_MM[h - 1]
     bhava_position_labels = {row.rashi_idx: row.house for row in bhavas}
     for name in GRAHA9:
         gp = positions[name]
         grid_pos = bhavas[gp.house - 1].rashi_idx
-        bhava_content[grid_pos].append(GRAHA_MM[name])
-    bhava_content[lagna_rashi_idx].insert(0, "(လဂ်)")
+        bhava_content[grid_pos]["planets"].append(GRAHA_MM[name])
+    bhava_content[lagna_rashi_idx]["lagna"] = True
 
     # --- Navamsa (D9) chart: same fixed-rashi convention as the Rashi
     # chart above (Mesha/Aries always at the top-middle grid slot) ---
     nav_lagna_idx = chart["navamsa_lagna_idx"]
-    nav_content = {h: [RASHI_MM[h - 1]] for h in range(1, 13)}
+    nav_content = _empty_slots()
+    for h in range(1, 13):
+        nav_content[h]["rashi"] = RASHI_MM[h - 1]
     for name in GRAHA9:
         nav_idx = chart["navamsa_grahas"][name]
-        nav_content[nav_idx].append(GRAHA_MM[name])
-    nav_content[nav_lagna_idx].insert(0, "(လဂ်)")
+        nav_content[nav_idx]["planets"].append(GRAHA_MM[name])
+    nav_content[nav_lagna_idx]["lagna"] = True
 
     return {
         "rashi": rashi_content, "bhava": bhava_content, "navamsa": nav_content,
