@@ -4,9 +4,15 @@ Generates a downloadable PDF report of a computed chart.
 
 Uses reportlab (pure Python, no system dependencies beyond pip install —
 easy on macOS). Myanmar Unicode text needs a font that actually contains
-Myanmar glyphs; we try a few common system font paths and fall back to
-Helvetica (which will render Myanmar text as boxes) with a clear warning
-printed to the console so this is easy to notice and fix.
+Myanmar glyphs; reportlab's built-in fonts (Helvetica etc.) don't, and
+relying on the *host* having one installed meant the PDF silently fell
+back to rendering Myanmar text as black boxes on any machine that
+didn't (e.g. a fresh Linux container/Codespace with no Myanmar font
+package) — this bit real users, not just a hypothetical. So this bundles
+Padauk (SIL Open Font License — see static/fonts/Padauk-LICENSE.txt),
+one directory over from this file, and tries that first; a handful of
+common system paths are kept below only as a fallback for anyone who's
+replaced it with a different font locally.
 """
 import io
 import os
@@ -25,14 +31,21 @@ from astro.constants import GRAHA_MM, RASHI_MM, GRAHA9
 from astro.chart_svg import (house_polygons, house_label_anchor, center_box,
                               text_layout_for_lines, _corner_point)
 
+_APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 FONT_NAME = "Helvetica"
 _CANDIDATE_FONTS = [
     # If you have "Masterpiece Uni Round" installed, point at its .ttf here
-    # (Font Book usually installs to ~/Library/Fonts or /Library/Fonts):
+    # (Font Book usually installs to ~/Library/Fonts or /Library/Fonts) to
+    # make the PDF match the web UI's own font:
     os.path.expanduser("~/Library/Fonts/MasterpieceUniRound.ttf"),
     os.path.expanduser("~/Library/Fonts/Masterpiece Uni Round.ttf"),
     "/Library/Fonts/MasterpieceUniRound.ttf",
     "/Library/Fonts/Masterpiece Uni Round.ttf",
+    # Bundled with this project — works out of the box on any machine,
+    # regardless of what (if anything) is installed system-wide, so this
+    # is the effective default whenever the font above isn't present.
+    os.path.join(_APP_DIR, "static", "fonts", "Padauk-Regular.ttf"),
     "/System/Library/Fonts/Supplemental/Myanmar MN.ttf",     # macOS fallback
     "/System/Library/Fonts/Myanmar.ttc",                      # older macOS
     "/usr/share/fonts/truetype/noto/NotoSansMyanmar-Regular.ttf",  # Linux (Noto)
