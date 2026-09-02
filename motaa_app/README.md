@@ -87,12 +87,15 @@ run `source venv/bin/activate` then `python app.py`.
 5. **Vimshottari Dasha** (`astro/dasha.py`) — standard 120-year Mahadasha
    cycle + Antardasha sub-periods, derived from the Moon's nakshatra position
    at birth.
-6. **PDF report** (`reports/pdf_report.py`) — via `reportlab`. Uses macOS's
-   built-in "Myanmar MN" font automatically so Burmese text renders correctly
-   in the PDF. If you have the **"Masterpiece Uni Round"** font installed
-   (used automatically in the web UI's CSS), point `_CANDIDATE_FONTS` in
-   `reports/pdf_report.py` at its `.ttf` file to also use it in the PDF —
-   see the comments at the top of that file for the exact paths to try.
+6. **PDF report** (`reports/pdf_report.py`) — via `reportlab`. Bundles the
+   **Padauk** Myanmar Unicode font (`static/fonts/Padauk-Regular.ttf`, SIL
+   Open Font License) so Burmese text renders correctly in the PDF out of
+   the box on any machine — macOS, Linux, a fresh Codespace — with no
+   system font install required. If you have the **"Masterpiece Uni
+   Round"** font installed instead (used automatically in the web UI's
+   CSS) and want the PDF to match it, point `_CANDIDATE_FONTS` in
+   `reports/pdf_report.py` at its `.ttf` file — it's tried first if
+   present, see the comments at the top of that file for the exact paths.
 
 ## Project layout (for future editing/extension)
 

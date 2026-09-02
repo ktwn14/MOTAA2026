@@ -44,44 +44,106 @@ def house_polygons(box: float = 300.0) -> Dict[int, List[Point]]:
     tl, tr, br, bl = cell(2, 1)
     polys[10] = [tl, tr, br, bl]          # right-middle
 
-    # --- top-left corner (0,0): diagonal TL-BR ("\"), houses 2 & 3 ---
+    # Every corner cell is split by a *chord of the outer square's own main
+    # diagonal* — i.e. the line from that cell's own outer corner (a corner
+    # of the whole box) to the inner grid corner nearest the box's center.
+    # This makes all 4 corners consistent with each other (and with the
+    # box's two real diagonals, (0,0)-(3u,3u) and (3u,0)-(0,3u)) — an
+    # earlier version of this function used a different, unrelated chord
+    # for 3 of the 4 corners, which drew a diagonal that didn't pass
+    # through that corner's own outer tip at all.
+
+    # --- top-left corner (0,0): diagonal (0,0)-(u,u) "\", houses 2 & 3 ---
     tl, tr, br, bl = cell(0, 0)
     polys[2] = [tl, tr, br]               # touches TOP+RIGHT edge (shares w/ H1)
     polys[3] = [tl, bl, br]               # touches LEFT+BOTTOM edge (shares w/ H4)
 
-    # --- bottom-left corner (0,2): diagonal TL-BR ("\"), houses 5 & 6 ---
+    # --- bottom-left corner (0,2): diagonal (0,3u)-(u,2u) "/", houses 5 & 6 ---
     tl, tr, br, bl = cell(0, 2)
-    polys[5] = [tl, tr, br]               # touches TOP+RIGHT (shares w/ H4 above)
-    polys[6] = [tl, bl, br]               # outer tip (touches LEFT+BOTTOM)
+    polys[5] = [tl, tr, bl]               # touches TOP edge (shares w/ H4 above)
+    polys[6] = [tr, br, bl]               # touches RIGHT edge (shares w/ H7)
 
-    # --- bottom-right corner (2,2): diagonal BL-TR ("/"), houses 8 & 9 ---
+    # --- bottom-right corner (2,2): diagonal (2u,2u)-(3u,3u) "\", houses 8 & 9 ---
     tl, tr, br, bl = cell(2, 2)
-    polys[8] = [tl, tr, bl]               # touches TOP+LEFT (shares w/ H7)
-    polys[9] = [tr, br, bl]               # outer tip (touches RIGHT+BOTTOM)
+    polys[8] = [tl, bl, br]               # touches LEFT edge (shares w/ H7)
+    polys[9] = [tl, tr, br]               # touches TOP edge (shares w/ H10)
 
-    # --- top-right corner (2,0): diagonal BL-TR ("/"), houses 11 & 12 ---
+    # --- top-right corner (2,0): diagonal (3u,0)-(2u,u) "/", houses 11 & 12 ---
     tl, tr, br, bl = cell(2, 0)
-    polys[11] = [tr, br, bl]              # touches RIGHT+BOTTOM (shares w/ H10 below)
-    polys[12] = [tl, tr, bl]              # touches TOP+LEFT (shares w/ H1)
+    polys[11] = [tr, br, bl]              # touches BOTTOM edge (shares w/ H10 below)
+    polys[12] = [tl, tr, bl]              # touches LEFT edge (shares w/ H1)
 
     return polys
 
 
-def house_label_anchor(house: int, box: float = 300.0) -> Point:
-    """A reasonable point to place text for a house. For the 4 plain
-    (rectangular) Kendra houses this is the simple centroid. For the 8
-    triangular corner houses, the centroid is pulled slightly toward the
-    polygon's own "outer" vertex (the one furthest from the box center) so
-    multi-line text clears the diagonal divider line."""
-    poly = house_polygons(box)[house]
+# Each corner cell holds 2 triangular houses split by one diagonal; these
+# are the two houses sharing each diagonal.
+_CORNER_SIBLING = {2: 3, 3: 2, 5: 6, 6: 5, 8: 9, 9: 8, 11: 12, 12: 11}
+
+
+def _outer_vertex(house: int, poly: List[Point], box: float) -> Point:
+    """The vertex a house's text should lean toward. For a triangular
+    corner house this is the vertex *not* shared with its sibling triangle
+    (the other house occupying the same corner cell) — pulling toward
+    "whichever vertex is furthest from the box center" (an earlier version
+    of this) picks the *same* point — one of the shared diagonal's own
+    endpoints — for both siblings, which pulls a crowded house's text
+    toward its sibling instead of away from it. For a plain rectangular
+    Kendra house there's no sibling to avoid, so the furthest-from-center
+    vertex is simply that house's own natural "outer corner"."""
+    if len(poly) == 3:
+        sibling_poly = house_polygons(box)[_CORNER_SIBLING[house]]
+        return next(p for p in poly if p not in sibling_poly)
+    cx = cy = box / 2.0
+    return max(poly, key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
+
+
+def _corner_point(house: int, poly: List[Point], box: float, pull: float) -> Point:
+    """Blend of the polygon's centroid and its `_outer_vertex` — 0 = dead
+    centroid, 1 = right on that outer vertex."""
     cx = sum(p[0] for p in poly) / len(poly)
     cy = sum(p[1] for p in poly) / len(poly)
-    if len(poly) == 3:
-        bx, by = box / 2.0, box / 2.0
-        outer = max(poly, key=lambda p: (p[0] - bx) ** 2 + (p[1] - by) ** 2)
-        cx = cx * 0.68 + outer[0] * 0.32
-        cy = cy * 0.68 + outer[1] * 0.32
-    return cx, cy
+    ox, oy = _outer_vertex(house, poly, box)
+    return cx * (1 - pull) + ox * pull, cy * (1 - pull) + oy * pull
+
+
+def house_label_anchor(house: int, box: float = 300.0, pull: float = 0.32) -> Point:
+    """A reasonable point to place a house's *planet* text. For the 4 plain
+    (rectangular) Kendra houses this is the simple centroid (pull ignored —
+    they aren't split by a diagonal, so there's no crowding to lean away
+    from). For the 8 triangular corner houses, the centroid is pulled
+    toward `_outer_vertex` — `pull` controls how far (0 = centroid, 1 = that
+    vertex); callers with a crowded (many-planet) house should pass a
+    larger pull so that house's text leans further away from the diagonal
+    it shares with its sibling."""
+    poly = house_polygons(box)[house]
+    if len(poly) != 3:
+        return sum(p[0] for p in poly) / len(poly), sum(p[1] for p in poly) / len(poly)
+    return _corner_point(house, poly, box, pull)
+
+
+def text_layout_for_lines(n: int, box: float = 300.0) -> Tuple[float, float, float]:
+    """Line-height, font-size, and anchor `pull` for a house whose text
+    block has `n` lines, scaled to `box`. Houses with more planets
+    stacked in them get smaller/tighter text *and* a stronger pull toward
+    their triangle's outer vertex, so the block both shrinks and leans
+    away from the shared diagonal instead of overrunning it or bleeding
+    into the neighboring house's own text. Tiers go all the way down
+    through n=6+ (rather than flattening out after n=4) because a
+    4-5-planet house is a real, if uncommon, case — not just a
+    theoretical one — and needs to keep shrinking to stay legible."""
+    scale = box / 300.0
+    if n <= 2:
+        line_h, size, pull = 13.0, 11.0, 0.32
+    elif n == 3:
+        line_h, size, pull = 10.0, 9.0, 0.30
+    elif n == 4:
+        line_h, size, pull = 8.0, 7.5, 0.26
+    elif n == 5:
+        line_h, size, pull = 6.5, 6.5, 0.22
+    else:
+        line_h, size, pull = 5.5, 5.5, 0.18
+    return line_h * scale, size * scale, pull
 
 
 def center_box(box: float = 300.0):
@@ -93,83 +155,79 @@ def polygon_to_svg_points(poly: List[Point]) -> str:
     return " ".join(f"{x:.1f},{y:.1f}" for x, y in poly)
 
 
-def render_diamond_svg(house_content: Dict[int, List[str]], center_title: str = "",
-                        center_sub: str = "", box: float = 300.0,
+def render_diamond_svg(house_content: Dict[int, dict], center_label: str = "",
+                        box: float = 300.0,
                         font_family: str = "'Masterpiece Uni Round','Myanmar Text',sans-serif") -> str:
     """
-    house_content: {house_number: [line1, line2, ...]} — short text lines
-    (e.g. rashi name, then planet abbreviations) to place in each house.
+    house_content: {grid_position: {"rashi": str, "lagna": bool,
+    "planets": [name, ...]}} for each of the 12 fixed grid slots (1 =
+    top-middle, going counter-clockwise). Only "planets" is drawn — the
+    lagna itself is just an entry in that same list (its own code, e.g.
+    "လဂ်"), so no separate marker or styling is needed for it. "rashi" and
+    "lagna" are kept in the data (some callers still use them, e.g. to
+    pick which grid slot a value belongs on) but not rendered — an
+    earlier version drew the rashi name and a grid/house number as a
+    small tag in each slot's corner, which read as clutter more than as
+    useful reference.
+    center_label: short text (e.g. "ရာသီ"/"ဘာဝ"/"နဝင်း (D9)") shown in the
+    unused center cell — just the chart type, not the person's name.
     Returns a standalone <svg>...</svg> string.
     """
-    polys = house_polygons(box)
     parts = [f'<svg viewBox="0 0 {box} {box}" xmlns="http://www.w3.org/2000/svg" '
               f'style="font-family:{font_family};max-width:100%;height:auto;">']
     parts.append(f'<rect x="0" y="0" width="{box}" height="{box}" '
                   f'fill="#fffdf7" stroke="#2b2b2b" stroke-width="2"/>')
 
-    # grid + diagonal lines
+    # grid + diagonal lines — each corner's diagonal is the chord of the
+    # box's own main diagonal that falls inside that cell (matching
+    # house_polygons(); see the comment there for why this is what makes
+    # all 4 corners consistent with each other).
     u = box / 3.0
-    lines = [
-        (u, 0, u, box), (2 * u, 0, 2 * u, box),          # verticals
-        (0, u, box, u), (0, 2 * u, box, 2 * u),           # horizontals
-        (0, 0, u, u),                                      # TL corner diagonal \
-        (0, 2 * u, u, 3 * u),                              # BL corner diagonal \
-        (2 * u, 2 * u, 3 * u, 3 * u),                       # BR corner diagonal / (part1)
-        (3 * u, 2 * u, 2 * u, 3 * u),                       # BR corner diagonal / (part2, drawn as line too)
-        (2 * u, u, 3 * u, 0),                               # TR corner diagonal /
-    ]
-    # simpler: draw exact diagonals matching house_polygons()
     diag_lines = [
-        (0, 0, u, u),                 # TL: \
-        (0, 2 * u, u, 3 * u),         # BL: \
-        (2 * u, 3 * u, 3 * u, 2 * u),  # BR: /
-        (2 * u, 0, 3 * u, u),          # TR: /
+        (0, 0, u, u),                  # TL: (0,0) -> (u,u)
+        (0, 3 * u, u, 2 * u),          # BL: (0,3u) -> (u,2u)
+        (3 * u, 3 * u, 2 * u, 2 * u),  # BR: (3u,3u) -> (2u,2u)
+        (3 * u, 0, 2 * u, u),          # TR: (3u,0) -> (2u,u)
     ]
     for x1, y1, x2, y2 in [(u, 0, u, box), (2 * u, 0, 2 * u, box),
                             (0, u, box, u), (0, 2 * u, box, 2 * u)] + diag_lines:
         parts.append(f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" '
                       f'stroke="#2b2b2b" stroke-width="1.5"/>')
 
-    # center label
+    # center label — just the chart type (e.g. "ရာသီ"), nothing else
     cx, cy, cw, ch = center_box(box)
-    parts.append(f'<text x="{cx + cw/2:.1f}" y="{cy + ch/2 - 4:.1f}" text-anchor="middle" '
-                  f'font-size="13" font-weight="700" fill="#4f33cc">{_esc(center_title)}</text>')
-    if center_sub:
-        parts.append(f'<text x="{cx + cw/2:.1f}" y="{cy + ch/2 + 14:.1f}" text-anchor="middle" '
-                      f'font-size="10" fill="#6b7280">{_esc(center_sub)}</text>')
+    if center_label:
+        parts.append(f'<text x="{cx + cw/2:.1f}" y="{cy + ch/2 + 4:.1f}" text-anchor="middle" '
+                      f'font-size="13" font-weight="700" fill="#4f33cc">{_esc(center_label)}</text>')
 
-    # house numbers + content
+    # planets (and the lagna marker among them) — centered, and all styled
+    # identically (same size/color) regardless of position in the list, so
+    # a multi-planet house doesn't have one line standing out from the
+    # rest. Each line is (bold_code, regular_rest): the code drawn bold,
+    # the degree/minute/retrograde-mark that follows it drawn at normal
+    # weight, as two <tspan>s sharing one centered <text> so the pair
+    # still centers as a single unit. No rashi name or house/grid number
+    # is drawn in the house any more — see house_content's own "rashi"
+    # field if that's ever needed again.
     for h in range(1, 13):
-        poly = polys[h]
-        anchor_x, anchor_y = house_label_anchor(h, box)
-        # house number, small, near the outer-most vertex of the polygon
-        num_x, num_y = _outer_label_point(h, poly, box)
-        parts.append(f'<text x="{num_x:.1f}" y="{num_y:.1f}" font-size="9" fill="#9ca3af">{h}</text>')
+        entry = house_content.get(h) or {}
+        planets = entry.get("planets", [])
+        n = len(planets)
+        pad = box * 0.03
 
-        lines = house_content.get(h, [])
-        n = len(lines)
-        start_y = anchor_y - (n - 1) * 6.5
-        for i, line in enumerate(lines):
-            y = start_y + i * 13
-            weight = "700" if i == 0 else "500"
-            size = 11 if i == 0 else 9.5
-            color = "#4f33cc" if i == 0 else "#1f2430"
+        line_h, size, pull = text_layout_for_lines(n, box)
+        anchor_x, anchor_y = house_label_anchor(h, box, pull=pull)
+        start_y = anchor_y - (n - 1) * line_h / 2.0
+        start_y = max(pad, min(start_y, box - pad - max(n - 1, 0) * line_h))
+        for i, (code, rest) in enumerate(planets):
+            y = start_y + i * line_h
+            rest_span = f'<tspan font-weight="400">{_esc(rest)}</tspan>' if rest else ""
             parts.append(f'<text x="{anchor_x:.1f}" y="{y:.1f}" text-anchor="middle" '
-                          f'font-size="{size}" font-weight="{weight}" fill="{color}">{_esc(line)}</text>')
+                          f'font-size="{size:.1f}" fill="#1f2430">'
+                          f'<tspan font-weight="700">{_esc(code)}</tspan>{rest_span}</text>')
 
     parts.append("</svg>")
     return "".join(parts)
-
-
-def _outer_label_point(house: int, poly: List[Point], box: float) -> Point:
-    """Small house-number placed near whichever polygon vertex is furthest
-    from the box center (i.e. the outer corner/edge of the chart)."""
-    cx = cy = box / 2.0
-    best = max(poly, key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
-    # nudge slightly inward so the digit isn't clipped by the border
-    nx = best[0] + (cx - best[0]) * 0.12
-    ny = best[1] + (cy - best[1]) * 0.12
-    return nx, ny
 
 
 def _esc(s: str) -> str:

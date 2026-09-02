@@ -5,12 +5,13 @@
   <div>
     <h1>{{ chart.input.name }} ၏ ဇာတာ</h1>
     <p class="muted">
-      {{ chart.local_dt.strftime('%Y-%m-%d %H:%M:%S') }} ({{ "%.2f"|format(chart.input.tz_offset_hours) }} UTC) ·
-      Lat {{ "%.4f"|format(chart.input.latitude) }}, Lon {{ "%.4f"|format(chart.input.longitude) }} ·
-      Ayanamsa: {{ chart.input.ayanamsa|capitalize }} ({{ "%.4f"|format(chart.ayanamsa_value) }}°)
+      {{ chart.local_dt.strftime('%Y-%m-%d %H:%M:%S') }} ({{ "%.2f"|format(chart.input.tz_offset_hours) }} UTC)
+      {%- if chart.input.location_name %} · {{ chart.input.location_name }}{% endif %} ·
+      Lat {{ dms(chart.input.latitude, 'N', 'S') }}, Lon {{ dms(chart.input.longitude, 'E', 'W') }} ·
+      Ayanamsa: {{ chart.input.ayanamsa|capitalize }} ({{ dms_sym(chart.ayanamsa_value) }})
     </p>
     <p class="lagna-line">လဂ် — <strong>{{ chart.lagna_rashi_mm }}</strong> {{ "%.4f"|format(chart.lagna_lon % 30) }}° ·
-      ဘာဝစနစ်: {{ chart.input.house_system }}</p>
+      ဘာဝစနစ်: {{ house_system_label(chart.input.house_system) }}</p>
   </div>
   <div class="actions">
     <a href="{{ url_for('pdf') }}" class="btn-primary">PDF ဒေါင်းလုဒ်</a>
@@ -19,46 +20,34 @@
 </div>
 
 <section class="card">
-  <h2>ဇာတာ ဇယား</h2>
-  <div class="chart-tabs">
-    <button type="button" class="chart-tab active" data-target="chart-rashi">ရာသီ</button>
-    <button type="button" class="chart-tab" data-target="chart-bhava">ဘာဝ</button>
-    <button type="button" class="chart-tab" data-target="chart-navamsa">နဝင်း (D9)</button>
+  <div class="charts-row">
+    <div class="chart-panel">{{ chart_svgs.rashi|safe }}</div>
+    <div class="chart-panel">{{ chart_svgs.bhava|safe }}</div>
+    <div class="chart-panel">{{ chart_svgs.navamsa|safe }}</div>
   </div>
-  <div id="chart-rashi" class="chart-panel">{{ chart_svgs.rashi|safe }}</div>
-  <div id="chart-bhava" class="chart-panel" style="display:none">{{ chart_svgs.bhava|safe }}</div>
-  <div id="chart-navamsa" class="chart-panel" style="display:none">{{ chart_svgs.navamsa|safe }}</div>
-  <p class="muted small">ရာသီ ဇယား = ရာသီ (whole-sign) အလိုက် တန့်များ။ ဘာဝ ဇယား = ရွေးထားသော ဘာဝစနစ် ({{ chart.input.house_system }}) ဖြင့် တွက်ထားသော တန့်များ (ရာသီ ဇယားနှင့် အနည်းငယ် ကွဲနိုင်သည်)။ နဝင်း = D9 စိတ္တဇာတာ။</p>
+  <p class="muted small">ရာသီ ဇယား = ရာသီ (whole-sign) အလိုက် တန့်များ။ ဘာဝ ဇယား = ရွေးထားသော ဘာဝစနစ် ({{ house_system_label(chart.input.house_system) }}) ဖြင့် တွက်ထားသော တန့်များ (ရာသီ ဇယားနှင့် အနည်းငယ် ကွဲနိုင်သည်)။ နဝင်း = D9 စိတ္တဇာတာ။
+    ဂြိုဟ်အတိုကောက် — <strong>လဂ်</strong>=လဂ်၊ <strong>၁</strong>=တနင်္ဂနွေ၊ <strong>၂</strong>=တနင်္လာ၊ <strong>၃</strong>=အင်္ဂါ၊ <strong>၄</strong>=ဗုဒ္ဓဟူး၊ <strong>၅</strong>=ကြာသပတေး၊ <strong>၆</strong>=သောကြာ၊ <strong>၀</strong>=စနေ၊ <strong>၈</strong>=ရာဟု၊ <strong>၉</strong>=ကိတ်၊ <strong>U</strong>=Uranus၊ <strong>N</strong>=Neptune၊ <strong>P</strong>=Pluto — နောက်က <strong>®️</strong> = retrograde (နာရက)။</p>
 </section>
-
-<script>
-document.querySelectorAll('.chart-tab').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.chart-tab').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.chart-panel').forEach(p => p.style.display = 'none');
-    btn.classList.add('active');
-    document.getElementById(btn.dataset.target).style.display = 'block';
-  });
-});
-</script>
 
 <section class="card">
   <h2>ဂြိုဟ် အင်အား (PlanetStrength — MOTAA Step 1-6)</h2>
   <div class="table-wrap">
   <table>
     <thead><tr>
-      <th>ဂြိုဟ်</th><th>ရာသီ</th><th>တန့်</th><th>ကာရက</th>
+      <th>ဂြိုဟ်</th><th>ရာသီ</th><th>အံသာ</th><th>လိတ္တာ</th><th>တန့်</th><th>ကာရက</th>
       <th>S1</th><th>S2</th><th>S3</th><th>S4</th><th>S5</th><th>S6</th>
       <th>နောက်ဆုံး</th><th>အဆင့်</th>
     </tr></thead>
     <tbody>
       {% for name in GRAHA9 %}
       {% set gp = chart.positions[name] %}
-      <tr class="{{ 'papa' if gp.karaka=='Papa' else 'soma' }}">
+      <tr>
         <td>{{ GRAHA_MM[name] }}</td>
         <td>{{ RASHI_MM[gp.rashi_idx-1] }}</td>
+        <td>{{ gp.amsa }}°</td>
+        <td>{{ gp.lipta }}'</td>
         <td>{{ gp.house }}</td>
-        <td>{{ 'ပါပ' if gp.karaka=='Papa' else 'သောမ' }}</td>
+        <td class="{{ 'papa-cell' if gp.karaka=='Papa' else 'soma-cell' }}">{{ 'ပါပ' if gp.karaka=='Papa' else 'သောမ' }}</td>
         <td>{{ '%.0f%%'|format(gp.step1*100) if gp.step1 is not none else '-' }}</td>
         <td>{{ '%.0f%%'|format(gp.step2*100) }}</td>
         <td>{{ '%.0f%%'|format(gp.step3*100) if gp.step3 is not none else '-' }}</td>

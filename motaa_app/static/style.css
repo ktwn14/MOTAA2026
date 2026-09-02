@@ -60,8 +60,8 @@ input, select {
 table { border-collapse: collapse; width: 100%; font-size: .88rem; }
 th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: center; white-space: nowrap; }
 thead th { background: #f0eeff; color: var(--accent-dark); position: sticky; top: 0; }
-tr.soma td:nth-child(4) { color: var(--soma); font-weight: 600; }
-tr.papa td:nth-child(4) { color: var(--papa); font-weight: 600; }
+td.soma-cell { color: var(--soma); font-weight: 600; }
+td.papa-cell { color: var(--papa); font-weight: 600; }
 td.strong { font-weight: 700; }
 td.pos { color: var(--soma); }
 td.neg { color: var(--papa); }
@@ -70,15 +70,11 @@ td.neg { color: var(--papa); }
 details summary { cursor: pointer; color: var(--accent-dark); }
 .now-running { background: #eef0ff; border-radius: 8px; padding: 10px 14px; display: inline-block; }
 
-/* --- Diamond chart tabs (Rashi / Bhava / Navamsa) --- */
-.chart-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
-.chart-tab {
-  background: #f0eeff; color: var(--accent-dark); border: 1px solid var(--border);
-  border-radius: 8px; padding: 8px 16px; font-weight: 600; cursor: pointer; font-size: .9rem;
-}
-.chart-tab.active { background: var(--accent); color: white; }
-.chart-panel { max-width: 460px; margin: 0 auto; }
+/* --- Diamond charts (Rashi / Bhava / Navamsa), shown side by side --- */
+.charts-row { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; }
+.chart-panel { flex: 1 1 280px; max-width: 340px; }
 
 @media (max-width: 640px) {
   .inline-fields { flex-direction: column; }
+  .charts-row { gap: 24px; }
 }

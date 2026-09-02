@@ -4,9 +4,15 @@ Generates a downloadable PDF report of a computed chart.
 
 Uses reportlab (pure Python, no system dependencies beyond pip install —
 easy on macOS). Myanmar Unicode text needs a font that actually contains
-Myanmar glyphs; we try a few common system font paths and fall back to
-Helvetica (which will render Myanmar text as boxes) with a clear warning
-printed to the console so this is easy to notice and fix.
+Myanmar glyphs; reportlab's built-in fonts (Helvetica etc.) don't, and
+relying on the *host* having one installed meant the PDF silently fell
+back to rendering Myanmar text as black boxes on any machine that
+didn't (e.g. a fresh Linux container/Codespace with no Myanmar font
+package) — this bit real users, not just a hypothetical. So this bundles
+Padauk (SIL Open Font License — see static/fonts/Padauk-LICENSE.txt),
+one directory over from this file, and tries that first; a handful of
+common system paths are kept below only as a fallback for anyone who's
+replaced it with a different font locally.
 """
 import io
 import os
@@ -22,37 +28,67 @@ from reportlab.graphics.shapes import Drawing, Polygon, Line, String
 from reportlab.graphics import renderPM
 
 from astro.constants import GRAHA_MM, RASHI_MM, GRAHA9
-from astro.chart_svg import house_polygons, house_label_anchor, center_box
+from astro.chart_svg import house_polygons, house_label_anchor, center_box, text_layout_for_lines
+from astro.ephemeris import HOUSE_SYSTEM_LABEL_MAP
+
+_APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 FONT_NAME = "Helvetica"
+FONT_NAME_BOLD = "Helvetica-Bold"
 _CANDIDATE_FONTS = [
     # If you have "Masterpiece Uni Round" installed, point at its .ttf here
-    # (Font Book usually installs to ~/Library/Fonts or /Library/Fonts):
+    # (Font Book usually installs to ~/Library/Fonts or /Library/Fonts) to
+    # make the PDF match the web UI's own font:
     os.path.expanduser("~/Library/Fonts/MasterpieceUniRound.ttf"),
     os.path.expanduser("~/Library/Fonts/Masterpiece Uni Round.ttf"),
     "/Library/Fonts/MasterpieceUniRound.ttf",
     "/Library/Fonts/Masterpiece Uni Round.ttf",
+    # Bundled with this project — works out of the box on any machine,
+    # regardless of what (if anything) is installed system-wide, so this
+    # is the effective default whenever the font above isn't present.
+    os.path.join(_APP_DIR, "static", "fonts", "Padauk-Regular.ttf"),
     "/System/Library/Fonts/Supplemental/Myanmar MN.ttf",     # macOS fallback
     "/System/Library/Fonts/Myanmar.ttc",                      # older macOS
     "/usr/share/fonts/truetype/noto/NotoSansMyanmar-Regular.ttf",  # Linux (Noto)
     "/usr/share/fonts/truetype/padauk/Padauk.ttf",            # Linux (Padauk)
 ]
+_CANDIDATE_FONTS_BOLD = [
+    os.path.expanduser("~/Library/Fonts/MasterpieceUniRound-Bold.ttf"),
+    "/Library/Fonts/MasterpieceUniRound-Bold.ttf",
+    os.path.join(_APP_DIR, "static", "fonts", "Padauk-Bold.ttf"),
+    "/usr/share/fonts/truetype/noto/NotoSansMyanmar-Bold.ttf",
+    "/usr/share/fonts/truetype/padauk/Padauk-Bold.ttf",
+]
 
 
 def _register_myanmar_font():
-    global FONT_NAME
+    global FONT_NAME, FONT_NAME_BOLD
     for path in _CANDIDATE_FONTS:
         if os.path.exists(path):
             try:
                 pdfmetrics.registerFont(TTFont("MyanmarFont", path))
                 FONT_NAME = "MyanmarFont"
+                break
+            except Exception:
+                continue
+    else:
+        print("[pdf_report] WARNING: no Myanmar-capable font found on this system — "
+              "Myanmar text in the PDF will not render correctly. Install 'Noto Sans "
+              "Myanmar' or 'Padauk' and add its path to _CANDIDATE_FONTS in "
+              "reports/pdf_report.py.")
+
+    for path in _CANDIDATE_FONTS_BOLD:
+        if os.path.exists(path):
+            try:
+                pdfmetrics.registerFont(TTFont("MyanmarFont-Bold", path))
+                FONT_NAME_BOLD = "MyanmarFont-Bold"
                 return
             except Exception:
                 continue
-    print("[pdf_report] WARNING: no Myanmar-capable font found on this system — "
-          "Myanmar text in the PDF will not render correctly. Install 'Noto Sans "
-          "Myanmar' or 'Padauk' and add its path to _CANDIDATE_FONTS in "
-          "reports/pdf_report.py.")
+    # No true bold face found for whichever font matched above — reuse the
+    # regular one rather than silently falling back to Helvetica-Bold
+    # (which would render Myanmar text as boxes again).
+    FONT_NAME_BOLD = FONT_NAME
 
 
 _register_myanmar_font()
@@ -70,6 +106,52 @@ def _styles():
 
 def _pct(v):
     return "-" if v is None else f"{v*100:.0f}%"
+
+
+def _dms(value: float, pos_dir: str, neg_dir: str) -> str:
+    """Format a signed decimal-degree float as "dd:mm:ss D" (matches the
+    web UI's own dd:mm:ss input/display convention)."""
+    direction = pos_dir if value >= 0 else neg_dir
+    value = abs(value)
+    deg = int(value)
+    minute_full = (value - deg) * 60.0
+    minute = int(minute_full)
+    sec = round((minute_full - minute) * 60.0)
+    if sec == 60:
+        sec, minute = 0, minute + 1
+    if minute == 60:
+        minute, deg = 0, deg + 1
+    return f"{deg}:{minute:02d}:{sec:02d} {direction}"
+
+
+def _dms_sym(value: float) -> str:
+    """Format an unsigned decimal-degree float (e.g. an ayanamsa value) as
+    "dd°mm'ss\"" — no direction letter, since it isn't a coordinate."""
+    deg = int(value)
+    minute_full = (value - deg) * 60.0
+    minute = int(minute_full)
+    sec = round((minute_full - minute) * 60.0)
+    if sec == 60:
+        sec, minute = 0, minute + 1
+    if minute == 60:
+        minute, deg = 0, deg + 1
+    return f"{deg}°{minute:02d}'{sec:02d}\""
+
+
+def _add_mixed_text(d, cx, y, bold_part, regular_part, size, color):
+    """Draws `bold_part` (FONT_NAME_BOLD) immediately followed by
+    `regular_part` (FONT_NAME), the pair centered as one unit at x=cx.
+    reportlab's graphics String has no rich-text/run concept (unlike the
+    web SVG's <tspan>), so this measures each part's width and places two
+    separate String shapes side by side instead."""
+    bold_w = pdfmetrics.stringWidth(bold_part, FONT_NAME_BOLD, size)
+    reg_w = pdfmetrics.stringWidth(regular_part, FONT_NAME, size) if regular_part else 0.0
+    x0 = cx - (bold_w + reg_w) / 2.0
+    d.add(String(x0, y, bold_part, fontName=FONT_NAME_BOLD, fontSize=size,
+                  fillColor=color, textAnchor="start"))
+    if regular_part:
+        d.add(String(x0 + bold_w, y, regular_part, fontName=FONT_NAME, fontSize=size,
+                      fillColor=color, textAnchor="start"))
 
 
 def _diamond_drawing(house_content, title, box=260):
@@ -92,17 +174,31 @@ def _diamond_drawing(house_content, title, box=260):
                      fillColor=colors.HexColor("#fffdf7"))
         d.add(p)
 
+    # planets (and the lagna marker among them) — centered, and all styled
+    # identically (same size/color) regardless of position in the list, so
+    # a multi-planet house doesn't have one line standing out from the
+    # rest. Each line is (bold_code, regular_rest) — the code drawn bold,
+    # the degree/minute/retrograde-mark that follows it drawn at normal
+    # weight (see _add_mixed_text). No rashi name or house number is
+    # drawn any more. Crowded (3+ planet) houses get smaller text and
+    # lean further toward their triangle's outer tip, so the block
+    # shrinks and moves away from the shared diagonal instead of
+    # overlapping the neighboring house's text (see
+    # chart_svg.text_layout_for_lines).
     for h in range(1, 13):
-        ax, ay = house_label_anchor(h, box)
-        lines = house_content.get(h, [])
-        n = len(lines)
-        start_y = ay + (n - 1) * 5 * scale
-        for i, line in enumerate(lines):
-            y = start_y - i * 10 * scale
-            size = (8 if i == 0 else 7) * scale
-            color = colors.HexColor("#4f33cc") if i == 0 else colors.HexColor("#1f2430")
-            d.add(String(ax, flip(y), line, fontName=FONT_NAME, fontSize=size,
-                          fillColor=color, textAnchor="middle"))
+        entry = house_content.get(h) or {}
+        planets = entry.get("planets", [])
+        n = len(planets)
+        pad = box * 0.03
+
+        line_h, size, pull = text_layout_for_lines(n, box)
+        ax, ay = house_label_anchor(h, box, pull=pull)
+        start_y = ay + (n - 1) * line_h / 2.0
+        start_y = min(start_y, box - pad)
+        start_y = max(start_y, pad + max(n - 1, 0) * line_h)
+        for i, (code, rest) in enumerate(planets):
+            y = start_y - i * line_h
+            _add_mixed_text(d, ax, flip(y), code, rest, size, colors.HexColor("#1f2430"))
     return d
 
 
@@ -116,11 +212,13 @@ def generate_pdf(chart, diamonds=None) -> io.BytesIO:
 
     binput = chart["input"]
     story.append(Paragraph(f"MOTAA ဇာတာ အစီရင်ခံစာ — {binput.name}", h1))
+    location_bit = f"{binput.location_name} &nbsp;·&nbsp; " if binput.location_name else ""
     meta = (f"{chart['local_dt'].strftime('%Y-%m-%d %H:%M:%S')} "
             f"(UTC{'+' if binput.tz_offset_hours >= 0 else ''}{binput.tz_offset_hours}) &nbsp;·&nbsp; "
-            f"Lat {binput.latitude:.4f}, Lon {binput.longitude:.4f} &nbsp;·&nbsp; "
-            f"Ayanamsa: {binput.ayanamsa} ({chart['ayanamsa_value']:.4f}&deg;) &nbsp;·&nbsp; "
-            f"House system: {binput.house_system}")
+            f"{location_bit}"
+            f"Lat {_dms(binput.latitude, 'N', 'S')}, Lon {_dms(binput.longitude, 'E', 'W')} &nbsp;·&nbsp; "
+            f"Ayanamsa: {binput.ayanamsa} ({_dms_sym(chart['ayanamsa_value'])}) &nbsp;·&nbsp; "
+            f"House system: {HOUSE_SYSTEM_LABEL_MAP.get(binput.house_system, binput.house_system)}")
     story.append(Paragraph(meta, muted))
     story.append(Paragraph(f"လဂ် — <b>{chart['lagna_rashi_mm']}</b> {chart['lagna_lon'] % 30:.4f}&deg;", body))
     story.append(Spacer(1, 10))
@@ -139,12 +237,12 @@ def generate_pdf(chart, diamonds=None) -> io.BytesIO:
 
     # --- Planet strength table ---
     story.append(Paragraph("ဂြိုဟ် အင်အား (MOTAA Step 1-6)", h2))
-    header = ["ဂြိုဟ်", "ရာသီ", "တန့်", "ကာရက", "S1", "S2", "S3", "S4", "S5", "S6", "နောက်ဆုံး"]
+    header = ["ဂြိုဟ်", "ရာသီ", "အံသာ", "လိတ္တာ", "တန့်", "ကာရက", "S1", "S2", "S3", "S4", "S5", "S6", "နောက်ဆုံး"]
     rows = [header]
     for name in GRAHA9:
         gp = chart["positions"][name]
         rows.append([
-            GRAHA_MM[name], RASHI_MM[gp.rashi_idx - 1], str(gp.house),
+            GRAHA_MM[name], RASHI_MM[gp.rashi_idx - 1], f"{gp.amsa}°", f"{gp.lipta}'", str(gp.house),
             "ပါပ" if gp.karaka == "Papa" else "သောမ",
             _pct(gp.step1), _pct(gp.step2), _pct(gp.step3), _pct(gp.step4), _pct(gp.step5), _pct(gp.step6),
             _pct(gp.final),

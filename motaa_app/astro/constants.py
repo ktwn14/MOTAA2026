@@ -30,6 +30,26 @@ GRAHA_MM = {
     "Rahu": "ရာဟု", "Ketu": "ကိတ်",
 }
 
+# Compact numeral code for each graha, used in the diamond charts where
+# GRAHA_MM's full names don't fit — the lagna's own short label is just
+# "လဂ်" (no numeral). Sun..Venus follow the classical 1..6 order; Saturn is
+# "0" rather than "7" per MOTAA's own convention, Rahu/Ketu are 8/9.
+GRAHA_SHORT = {
+    "Sun": "၁", "Moon": "၂", "Mars": "၃", "Mercury": "၄", "Jupiter": "၅",
+    "Venus": "၆", "Saturn": "၀", "Rahu": "၈", "Ketu": "၉",
+}
+LAGNA_SHORT = "လဂ်"
+
+# ---------------------------------------------------------------------------
+# Outer planets (Uranus/Neptune/Pluto) — not part of the classical 9-graha
+# Vedic system MOTAA's Steps 1-6 / karaka / dasha logic is built on, so
+# they're display-only reference points on the diamond charts (short code
+# only, no rashi_idx/house math beyond simple placement, no strength or
+# dasha calculation).
+# ---------------------------------------------------------------------------
+OUTER_PLANETS = ["Uranus", "Neptune", "Pluto"]
+OUTER_PLANET_SHORT = {"Uranus": "U", "Neptune": "N", "Pluto": "P"}
+
 # Natural benefic / malefic (reference only; MOTAA's *functional* karaka
 # classification, not this natural one, drives the actual calculations)
 NATURAL_BENEFIC = {"Jupiter", "Venus"}
