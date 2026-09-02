@@ -138,6 +138,22 @@ def _dms_sym(value: float) -> str:
     return f"{deg}°{minute:02d}'{sec:02d}\""
 
 
+def _add_mixed_text(d, cx, y, bold_part, regular_part, size, color):
+    """Draws `bold_part` (FONT_NAME_BOLD) immediately followed by
+    `regular_part` (FONT_NAME), the pair centered as one unit at x=cx.
+    reportlab's graphics String has no rich-text/run concept (unlike the
+    web SVG's <tspan>), so this measures each part's width and places two
+    separate String shapes side by side instead."""
+    bold_w = pdfmetrics.stringWidth(bold_part, FONT_NAME_BOLD, size)
+    reg_w = pdfmetrics.stringWidth(regular_part, FONT_NAME, size) if regular_part else 0.0
+    x0 = cx - (bold_w + reg_w) / 2.0
+    d.add(String(x0, y, bold_part, fontName=FONT_NAME_BOLD, fontSize=size,
+                  fillColor=color, textAnchor="start"))
+    if regular_part:
+        d.add(String(x0 + bold_w, y, regular_part, fontName=FONT_NAME, fontSize=size,
+                      fillColor=color, textAnchor="start"))
+
+
 def _diamond_drawing(house_content, title, box=260):
     """Builds a reportlab Drawing of the Myanmar-style diamond chart, reusing
     the exact same geometry as the web SVG version (astro/chart_svg.py)."""
@@ -159,9 +175,11 @@ def _diamond_drawing(house_content, title, box=260):
         d.add(p)
 
     # planets (and the lagna marker among them) — centered, and all styled
-    # identically (same size/weight/color) regardless of position in the
-    # list, so a multi-planet house doesn't have one line standing out in
-    # a different color from the rest. No rashi name or house number is
+    # identically (same size/color) regardless of position in the list, so
+    # a multi-planet house doesn't have one line standing out from the
+    # rest. Each line is (bold_code, regular_rest) — the code drawn bold,
+    # the degree/minute/retrograde-mark that follows it drawn at normal
+    # weight (see _add_mixed_text). No rashi name or house number is
     # drawn any more. Crowded (3+ planet) houses get smaller text and
     # lean further toward their triangle's outer tip, so the block
     # shrinks and moves away from the shared diagonal instead of
@@ -173,15 +191,14 @@ def _diamond_drawing(house_content, title, box=260):
         n = len(planets)
         pad = box * 0.03
 
-        line_h, size_head, _size_body, pull = text_layout_for_lines(n, box)
+        line_h, size, pull = text_layout_for_lines(n, box)
         ax, ay = house_label_anchor(h, box, pull=pull)
         start_y = ay + (n - 1) * line_h / 2.0
         start_y = min(start_y, box - pad)
         start_y = max(start_y, pad + max(n - 1, 0) * line_h)
-        for i, name in enumerate(planets):
+        for i, (code, rest) in enumerate(planets):
             y = start_y - i * line_h
-            d.add(String(ax, flip(y), name, fontName=FONT_NAME_BOLD, fontSize=size_head,
-                          fillColor=colors.HexColor("#1f2430"), textAnchor="middle"))
+            _add_mixed_text(d, ax, flip(y), code, rest, size, colors.HexColor("#1f2430"))
     return d
 
 

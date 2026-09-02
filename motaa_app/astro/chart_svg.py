@@ -122,24 +122,28 @@ def house_label_anchor(house: int, box: float = 300.0, pull: float = 0.32) -> Po
     return _corner_point(house, poly, box, pull)
 
 
-def text_layout_for_lines(n: int, box: float = 300.0) -> Tuple[float, float, float, float]:
-    """Line-height, head font-size, body font-size, and anchor `pull` for a
-    house whose text block has `n` lines, scaled to `box`. Houses with more
-    planets stacked in them get smaller/tighter text *and* a stronger pull
-    toward their triangle's outer vertex, so the block both shrinks and
-    leans away from the shared diagonal instead of overrunning it (the
-    fixed-size, symmetric-growth layout this replaces let 3+ planet houses
-    overlap their neighbor's text, or spill past the chart's own border)."""
+def text_layout_for_lines(n: int, box: float = 300.0) -> Tuple[float, float, float]:
+    """Line-height, font-size, and anchor `pull` for a house whose text
+    block has `n` lines, scaled to `box`. Houses with more planets
+    stacked in them get smaller/tighter text *and* a stronger pull toward
+    their triangle's outer vertex, so the block both shrinks and leans
+    away from the shared diagonal instead of overrunning it or bleeding
+    into the neighboring house's own text. Tiers go all the way down
+    through n=6+ (rather than flattening out after n=4) because a
+    4-5-planet house is a real, if uncommon, case — not just a
+    theoretical one — and needs to keep shrinking to stay legible."""
     scale = box / 300.0
     if n <= 2:
-        line_h, size_head, size_body, pull = 13.0, 11.0, 9.5, 0.32
+        line_h, size, pull = 13.0, 11.0, 0.32
     elif n == 3:
-        line_h, size_head, size_body, pull = 10.5, 10.0, 8.5, 0.44
+        line_h, size, pull = 10.0, 9.0, 0.30
     elif n == 4:
-        line_h, size_head, size_body, pull = 9.0, 9.5, 7.5, 0.54
+        line_h, size, pull = 8.0, 7.5, 0.26
+    elif n == 5:
+        line_h, size, pull = 6.5, 6.5, 0.22
     else:
-        line_h, size_head, size_body, pull = 7.5, 9.0, 6.5, 0.60
-    return line_h * scale, size_head * scale, size_body * scale, pull
+        line_h, size, pull = 5.5, 5.5, 0.18
+    return line_h * scale, size * scale, pull
 
 
 def center_box(box: float = 300.0):
@@ -197,9 +201,12 @@ def render_diamond_svg(house_content: Dict[int, dict], center_label: str = "",
                       f'font-size="13" font-weight="700" fill="#4f33cc">{_esc(center_label)}</text>')
 
     # planets (and the lagna marker among them) — centered, and all styled
-    # identically (same size/weight/color) regardless of position in the
-    # list, so a multi-planet house doesn't have one line standing out in
-    # a different color from the rest. No rashi name or house/grid number
+    # identically (same size/color) regardless of position in the list, so
+    # a multi-planet house doesn't have one line standing out from the
+    # rest. Each line is (bold_code, regular_rest): the code drawn bold,
+    # the degree/minute/retrograde-mark that follows it drawn at normal
+    # weight, as two <tspan>s sharing one centered <text> so the pair
+    # still centers as a single unit. No rashi name or house/grid number
     # is drawn in the house any more — see house_content's own "rashi"
     # field if that's ever needed again.
     for h in range(1, 13):
@@ -208,14 +215,16 @@ def render_diamond_svg(house_content: Dict[int, dict], center_label: str = "",
         n = len(planets)
         pad = box * 0.03
 
-        line_h, size_head, _size_body, pull = text_layout_for_lines(n, box)
+        line_h, size, pull = text_layout_for_lines(n, box)
         anchor_x, anchor_y = house_label_anchor(h, box, pull=pull)
         start_y = anchor_y - (n - 1) * line_h / 2.0
         start_y = max(pad, min(start_y, box - pad - max(n - 1, 0) * line_h))
-        for i, name in enumerate(planets):
+        for i, (code, rest) in enumerate(planets):
             y = start_y + i * line_h
+            rest_span = f'<tspan font-weight="400">{_esc(rest)}</tspan>' if rest else ""
             parts.append(f'<text x="{anchor_x:.1f}" y="{y:.1f}" text-anchor="middle" '
-                          f'font-size="{size_head:.1f}" font-weight="700" fill="#1f2430">{_esc(name)}</text>')
+                          f'font-size="{size:.1f}" fill="#1f2430">'
+                          f'<tspan font-weight="700">{_esc(code)}</tspan>{rest_span}</text>')
 
     parts.append("</svg>")
     return "".join(parts)

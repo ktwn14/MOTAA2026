@@ -82,25 +82,32 @@ def _empty_slots():
     return {h: {"rashi": "", "lagna": False, "planets": []} for h in range(1, 13)}
 
 
-def _format_entry(code: str, lon: float, retro: bool, with_degree: bool) -> str:
-    """"<code>[ <degree>°<minute>'][ R]" — the degree/minute is only shown
-    on the Rashi chart, where there's room (and reason) to show exactly
-    where in the sign a planet sits, not just which sign; the retrograde
-    "R" suffix is shown everywhere a planet can actually be retrograde."""
+RETROGRADE_MARK = "®️"
+
+
+def _format_entry(code: str, lon: float, retro: bool, with_degree: bool):
+    """Returns (bold_part, regular_part): bold_part is just the graha/
+    lagna code (e.g. "၄", "လဂ်"); regular_part is everything else —
+    degree/minute (Rashi chart only — that's the only chart with room,
+    and reason, to show exactly where in the sign a planet sits, not
+    just which sign) plus the retrograde mark, shown everywhere a planet
+    can actually be retrograde. Callers render the two parts at
+    different font weights (see chart_svg.render_diamond_svg)."""
+    regular = ""
     if with_degree:
         amsa, lipta = motaa.amsa_lipta(lon)
-        text = f"{code} {amsa}°{lipta}'"
-    else:
-        text = code
-    return f"{text} R" if retro else text
+        regular = f" {amsa}°{lipta}'"
+    if retro:
+        regular += f" {RETROGRADE_MARK}"
+    return code, regular
 
 
 def _fill_sorted(content: dict, buckets: dict, retrograde: dict, with_degree: bool):
     """buckets: {grid_pos: [(lon, code, name), ...]}. Sorts each grid
     slot's entries by degree-within-sign ascending (so a 2+ planet house
     always reads low-to-high, not in whatever order they happened to be
-    computed in) and appends the formatted text to content[grid_pos]
-    ["planets"]."""
+    computed in) and appends the formatted (bold_part, regular_part)
+    tuple to content[grid_pos]["planets"]."""
     for grid_pos, entries in buckets.items():
         for lon, code, name in sorted(entries, key=lambda e: e[0] % 30.0):
             content[grid_pos]["planets"].append(
@@ -110,8 +117,10 @@ def _fill_sorted(content: dict, buckets: dict, retrograde: dict, with_degree: bo
 def build_diamond_chart_data(chart: dict):
     """Prepares house_content dicts for the 3 diamond-chart displays
     (Rashi / Bhava / Navamsa), each as {house_number: {"rashi": name,
-    "lagna": bool, "planets": [name, ...]}} — see astro/chart_svg.py's
-    render_diamond_svg for how this is drawn. Planets use their short
+    "lagna": bool, "planets": [(bold_code, regular_rest), ...]}} — see
+    astro/chart_svg.py's render_diamond_svg for how this is drawn (each
+    tuple as one line, code in bold, the rest — degree/minute and/or a
+    retrograde mark — in a lighter weight). Planets use their short
     numeral code (GRAHA_SHORT), not the full GRAHA_MM name, to leave room
     in these small cells; the outer planets (Uranus/Neptune/Pluto) are
     added as plain reference points (short code "U"/"N"/"P" only — no
@@ -165,7 +174,7 @@ def build_diamond_chart_data(chart: dict):
         grid_pos = bhavas[house - 1].rashi_idx
         bhava_buckets[grid_pos].append((lon, OUTER_PLANET_SHORT[name], name))
     _fill_sorted(bhava_content, bhava_buckets, retrograde, with_degree=False)
-    bhava_content[lagna_rashi_idx]["planets"].insert(0, LAGNA_SHORT)
+    bhava_content[lagna_rashi_idx]["planets"].insert(0, (LAGNA_SHORT, ""))
     bhava_content[lagna_rashi_idx]["lagna"] = True
 
     # --- Navamsa (D9) chart: same fixed-rashi convention as the Rashi
@@ -184,7 +193,7 @@ def build_diamond_chart_data(chart: dict):
         nav_idx = motaa.navamsa_rashi_index(lon)
         nav_buckets[nav_idx].append((lon, OUTER_PLANET_SHORT[name], name))
     _fill_sorted(nav_content, nav_buckets, retrograde, with_degree=False)
-    nav_content[nav_lagna_idx]["planets"].insert(0, LAGNA_SHORT)
+    nav_content[nav_lagna_idx]["planets"].insert(0, (LAGNA_SHORT, ""))
     nav_content[nav_lagna_idx]["lagna"] = True
 
     return {"rashi": rashi_content, "bhava": bhava_content, "navamsa": nav_content}
