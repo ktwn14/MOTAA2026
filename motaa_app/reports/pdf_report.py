@@ -72,6 +72,22 @@ def _pct(v):
     return "-" if v is None else f"{v*100:.0f}%"
 
 
+def _dms(value: float, pos_dir: str, neg_dir: str) -> str:
+    """Format a signed decimal-degree float as "dd:mm:ss D" (matches the
+    web UI's own dd:mm:ss input/display convention)."""
+    direction = pos_dir if value >= 0 else neg_dir
+    value = abs(value)
+    deg = int(value)
+    minute_full = (value - deg) * 60.0
+    minute = int(minute_full)
+    sec = round((minute_full - minute) * 60.0)
+    if sec == 60:
+        sec, minute = 0, minute + 1
+    if minute == 60:
+        minute, deg = 0, deg + 1
+    return f"{deg}:{minute:02d}:{sec:02d} {direction}"
+
+
 def _diamond_drawing(house_content, title, box=260):
     """Builds a reportlab Drawing of the Myanmar-style diamond chart, reusing
     the exact same geometry as the web SVG version (astro/chart_svg.py)."""
@@ -124,9 +140,11 @@ def generate_pdf(chart, diamonds=None) -> io.BytesIO:
 
     binput = chart["input"]
     story.append(Paragraph(f"MOTAA ဇာတာ အစီရင်ခံစာ — {binput.name}", h1))
+    location_bit = f"{binput.location_name} &nbsp;·&nbsp; " if binput.location_name else ""
     meta = (f"{chart['local_dt'].strftime('%Y-%m-%d %H:%M:%S')} "
             f"(UTC{'+' if binput.tz_offset_hours >= 0 else ''}{binput.tz_offset_hours}) &nbsp;·&nbsp; "
-            f"Lat {binput.latitude:.4f}, Lon {binput.longitude:.4f} &nbsp;·&nbsp; "
+            f"{location_bit}"
+            f"Lat {_dms(binput.latitude, 'N', 'S')}, Lon {_dms(binput.longitude, 'E', 'W')} &nbsp;·&nbsp; "
             f"Ayanamsa: {binput.ayanamsa} ({chart['ayanamsa_value']:.4f}&deg;) &nbsp;·&nbsp; "
             f"House system: {binput.house_system}")
     story.append(Paragraph(meta, muted))
@@ -147,12 +165,12 @@ def generate_pdf(chart, diamonds=None) -> io.BytesIO:
 
     # --- Planet strength table ---
     story.append(Paragraph("ဂြိုဟ် အင်အား (MOTAA Step 1-6)", h2))
-    header = ["ဂြိုဟ်", "ရာသီ", "တန့်", "ကာရက", "S1", "S2", "S3", "S4", "S5", "S6", "နောက်ဆုံး"]
+    header = ["ဂြိုဟ်", "ရာသီ", "အံသာ", "လိတ္တာ", "တန့်", "ကာရက", "S1", "S2", "S3", "S4", "S5", "S6", "နောက်ဆုံး"]
     rows = [header]
     for name in GRAHA9:
         gp = chart["positions"][name]
         rows.append([
-            GRAHA_MM[name], RASHI_MM[gp.rashi_idx - 1], str(gp.house),
+            GRAHA_MM[name], RASHI_MM[gp.rashi_idx - 1], f"{gp.amsa}°", f"{gp.lipta}'", str(gp.house),
             "ပါပ" if gp.karaka == "Papa" else "သောမ",
             _pct(gp.step1), _pct(gp.step2), _pct(gp.step3), _pct(gp.step4), _pct(gp.step5), _pct(gp.step6),
             _pct(gp.final),

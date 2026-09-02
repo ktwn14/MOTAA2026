@@ -28,6 +28,7 @@ class BirthInput:
     ayanamsa: str = "lahiri"
     node_mode: str = "mean"          # "mean" or "true"
     house_system: str = "bhava_madhya"
+    location_name: str = ""          # free-text birthplace name, display only
 
 
 def build_chart(binput: BirthInput):

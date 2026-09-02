@@ -38,11 +38,30 @@
       </select>
     </div>
 
+    <div class="field">
+      <label>မွေးရပ်ဒေသ အမည် (Location name)</label>
+      <input type="text" id="location_name" name="location_name" placeholder="ဥပမာ - ရန်ကုန်၊ ပြင်ဦးလွင်" value="ရန်ကုန် (Yangon)">
+    </div>
+
     <fieldset class="field-group">
-      <legend>တည်နေရာ (Latitude / Longitude) နှင့် Time Zone</legend>
+      <legend>တည်နေရာ (Latitude / Longitude — dd:mm:ss) နှင့် Time Zone</legend>
       <div class="inline-fields">
-        <input type="number" step="0.0001" id="latitude" name="latitude" placeholder="Latitude" value="16.8409" required>
-        <input type="number" step="0.0001" id="longitude" name="longitude" placeholder="Longitude" value="96.1735" required>
+        <input type="text" id="latitude_dms" name="latitude_dms" placeholder="Latitude dd:mm:ss e.g. 16:50:27"
+               value="16:50:27" pattern="^\d{1,3}:\d{1,2}:\d{1,2}(\.\d+)?$" required>
+        <select id="latitude_dir" name="latitude_dir">
+          <option value="N" selected>N</option>
+          <option value="S">S</option>
+        </select>
+      </div>
+      <div class="inline-fields" style="margin-top:8px;">
+        <input type="text" id="longitude_dms" name="longitude_dms" placeholder="Longitude dd:mm:ss e.g. 96:10:25"
+               value="96:10:25" pattern="^\d{1,3}:\d{1,2}:\d{1,2}(\.\d+)?$" required>
+        <select id="longitude_dir" name="longitude_dir">
+          <option value="E" selected>E</option>
+          <option value="W">W</option>
+        </select>
+      </div>
+      <div class="inline-fields" style="margin-top:8px;">
         <input type="number" step="0.25" id="tz_offset_hours" name="tz_offset_hours" placeholder="UTC offset (hr)" value="6.5" required>
       </div>
     </fieldset>
@@ -83,12 +102,28 @@ const CITY_DATA = {
   "{{ name }}": [{{ coords[0] if coords[0] is not none else 'null' }}, {{ coords[1] if coords[1] is not none else 'null' }}, {{ coords[2] }}],
   {% endfor %}
 };
+function decToDMS(value) {
+  const dir_pos = value < 0 ? -1 : 1;
+  value = Math.abs(value);
+  let deg = Math.floor(value);
+  const minFull = (value - deg) * 60;
+  let min = Math.floor(minFull);
+  let sec = Math.round((minFull - min) * 60);
+  if (sec === 60) { sec = 0; min += 1; }
+  if (min === 60) { min = 0; deg += 1; }
+  return { deg, min, sec, negative: dir_pos < 0 };
+}
 function fillCity(name) {
   const c = CITY_DATA[name];
   if (!c || c[0] === null) return;
-  document.getElementById('latitude').value = c[0];
-  document.getElementById('longitude').value = c[1];
+  const lat = decToDMS(c[0]);
+  const lon = decToDMS(c[1]);
+  document.getElementById('latitude_dms').value = `${lat.deg}:${String(lat.min).padStart(2,'0')}:${String(lat.sec).padStart(2,'0')}`;
+  document.getElementById('latitude_dir').value = lat.negative ? 'S' : 'N';
+  document.getElementById('longitude_dms').value = `${lon.deg}:${String(lon.min).padStart(2,'0')}:${String(lon.sec).padStart(2,'0')}`;
+  document.getElementById('longitude_dir').value = lon.negative ? 'W' : 'E';
   document.getElementById('tz_offset_hours').value = c[2];
+  document.getElementById('location_name').value = name;
 }
 </script>
 {% endblock %}

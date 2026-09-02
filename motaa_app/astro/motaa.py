@@ -22,6 +22,20 @@ def rashi_index(lon: float) -> int:
     return int((lon % 360.0) // 30) + 1
 
 
+def amsa_lipta(lon: float):
+    """Degree (အံသာ, 0-29) and arc-minute (လိတ္တာ, 0-59) within the planet's
+    own rashi — e.g. 187.62 deg (7 deg into Vrishabha) -> (7, 37)."""
+    deg_in_sign = lon % 30.0
+    amsa = int(deg_in_sign)
+    lipta = round((deg_in_sign - amsa) * 60.0)
+    if lipta == 60:
+        lipta = 0
+        amsa += 1
+        if amsa == 30:
+            amsa = 0
+    return amsa, lipta
+
+
 def angular_distance(a: float, b: float) -> float:
     """Minimal angular distance 0..180 between two longitudes."""
     d = abs((a - b) % 360.0)
@@ -94,6 +108,8 @@ class GrahaPos:
     name: str                 # English key, e.g. "Sun"
     lon: float                # sidereal longitude, degrees 0-360
     rashi_idx: int = 0
+    amsa: int = 0              # degree within the rashi, 0-29 (အံသာ)
+    lipta: int = 0             # arc-minute within that degree, 0-59 (လိတ္တာ)
     house: int = 0            # bhava-madhya based placement
     own_sign: Optional[bool] = None
     karaka: str = ""          # "Soma" or "Papa"
@@ -200,11 +216,12 @@ def compute_all(grahas: Dict[str, float], lagna_lon: float, cusps: List[float]):
     for name in GRAHA9:
         lon = grahas[name]
         r_idx = rashi_index(lon)
+        amsa, lipta = amsa_lipta(lon)
         house = bhava_of(lon, cusps)
         own_sign = (RASHI_LORD[r_idx - 1] == name) if name in GRAHA7 else None
         karaka = graha_karaka_status(name, bhavas)
-        gp = GrahaPos(name=name, lon=lon, rashi_idx=r_idx, house=house,
-                      own_sign=own_sign, karaka=karaka)
+        gp = GrahaPos(name=name, lon=lon, rashi_idx=r_idx, amsa=amsa, lipta=lipta,
+                      house=house, own_sign=own_sign, karaka=karaka)
         gp.step1 = absolute_positional_strength(name, lon, r_idx)
         gp.step2 = relative_positional_strength(house, name, bhavas)
         gp.step3 = combustion_score(name, lon, sun_lon) if name != "Sun" else None
