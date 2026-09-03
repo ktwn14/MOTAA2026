@@ -10,6 +10,7 @@ See README.md for setup (pip install steps) and architecture notes.
 """
 import io
 import json
+import os
 import re
 from datetime import datetime
 
@@ -32,6 +33,30 @@ CITY_PRESETS = {
     "မြစ်ကြီးနား (Myitkyina)": (25.3833, 97.4000, 6.5),
     "-- ကိုယ်တိုင် Latitude/Longitude ရိုက်ရန် --": (None, None, 6.5),
 }
+
+# Saved birth-data profiles ("ဇာတာ Data" the user wants to reuse without
+# retyping every field) — a small local JSON file next to this app, not a
+# real database: fine for one person's own use, no size/count limit worth
+# enforcing here. Keyed by profile name -> the same dict shape as
+# session["last_input"] below, so a saved profile can be dropped straight
+# into that session key to prefill the form via index()'s existing
+# last-input logic. Not committed to git (see .gitignore) since it holds
+# real birth data, not app config.
+PROFILES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "profiles.json")
+
+
+def _load_profiles() -> dict:
+    try:
+        with open(PROFILES_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _save_profiles(profiles: dict) -> None:
+    os.makedirs(os.path.dirname(PROFILES_PATH), exist_ok=True)
+    with open(PROFILES_PATH, "w", encoding="utf-8") as f:
+        json.dump(profiles, f, ensure_ascii=False, indent=2)
 
 
 def _parse_dms(dms_str: str, direction: str) -> float:
@@ -105,6 +130,21 @@ def _chart_to_session_input(form) -> BirthInput:
     )
 
 
+def _binput_to_dict(binput: BirthInput) -> dict:
+    """The subset of BirthInput's own fields worth persisting (as
+    session["last_input"], or a saved profile in profiles.json) — the
+    raw inputs, not any computed chart data, so /pdf and a reloaded
+    profile both just recompute via build_chart()."""
+    return {
+        "name": binput.name, "year": binput.year, "month": binput.month, "day": binput.day,
+        "hour": binput.hour, "minute": binput.minute, "second": binput.second,
+        "tz_offset_hours": binput.tz_offset_hours, "latitude": binput.latitude,
+        "longitude": binput.longitude, "ayanamsa": binput.ayanamsa,
+        "node_mode": binput.node_mode, "house_system": binput.house_system,
+        "location_name": binput.location_name, "include_outer": binput.include_outer,
+    }
+
+
 app.jinja_env.globals["dms"] = _decimal_to_dms
 app.jinja_env.globals["dms_sym"] = _decimal_to_dms_symbols
 app.jinja_env.globals["house_system_label"] = lambda key: HOUSE_SYSTEM_LABEL_MAP.get(key, key)
@@ -122,7 +162,9 @@ def index():
         lon_dms, lon_dir = _dms_parts(last["longitude"], "E", "W")
         last = {**last, "latitude_dms": lat_dms, "latitude_dir": lat_dir,
                 "longitude_dms": lon_dms, "longitude_dir": lon_dir}
-    return render_template("index.html", cities=CITY_PRESETS, house_systems=HOUSE_SYSTEM_LABELS, last=last)
+    profiles = _load_profiles()
+    return render_template("index.html", cities=CITY_PRESETS, house_systems=HOUSE_SYSTEM_LABELS,
+                            last=last, profiles=profiles)
 
 
 @app.route("/calculate", methods=["POST"])
@@ -134,14 +176,7 @@ def calculate():
         return render_template("error.html", message=str(exc)), 400
 
     # stash the raw inputs (not the computed objects) in session so /pdf can recompute
-    session["last_input"] = {
-        "name": binput.name, "year": binput.year, "month": binput.month, "day": binput.day,
-        "hour": binput.hour, "minute": binput.minute, "second": binput.second,
-        "tz_offset_hours": binput.tz_offset_hours, "latitude": binput.latitude,
-        "longitude": binput.longitude, "ayanamsa": binput.ayanamsa,
-        "node_mode": binput.node_mode, "house_system": binput.house_system,
-        "location_name": binput.location_name, "include_outer": binput.include_outer,
-    }
+    session["last_input"] = _binput_to_dict(binput)
 
     # group grahas by house, for the diamond-chart grid display
     house_planets = {h: [] for h in range(1, 13)}
@@ -160,6 +195,43 @@ def calculate():
         "result.html", chart=chart, GRAHA_MM=GRAHA_MM, RASHI_MM=RASHI_MM, GRAHA9=GRAHA9,
         house_planets=house_planets, diamonds=diamonds, chart_svgs=chart_svgs, now=datetime.now(),
     )
+
+
+@app.route("/profiles/save", methods=["POST"])
+def save_profile():
+    try:
+        binput = _chart_to_session_input(request.form)
+    except Exception as exc:
+        return render_template("error.html", message=str(exc)), 400
+
+    # A separate "save as" name is nicer (lets the same person be saved
+    # under a nickname, or the same name saved twice under different
+    # labels), but falling back to the birth-data name itself means the
+    # save button still works with nothing extra typed.
+    profile_name = request.form.get("profile_name", "").strip() or binput.name
+
+    profiles = _load_profiles()
+    profiles[profile_name] = _binput_to_dict(binput)
+    _save_profiles(profiles)
+
+    session["last_input"] = profiles[profile_name]
+    return redirect(url_for("index"))
+
+
+@app.route("/profiles/load/<name>", methods=["GET"])
+def load_profile(name):
+    profiles = _load_profiles()
+    if name in profiles:
+        session["last_input"] = profiles[name]
+    return redirect(url_for("index"))
+
+
+@app.route("/profiles/delete/<name>", methods=["POST"])
+def delete_profile(name):
+    profiles = _load_profiles()
+    profiles.pop(name, None)
+    _save_profiles(profiles)
+    return redirect(url_for("index"))
 
 
 @app.route("/pdf")

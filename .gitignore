@@ -1,3 +1,4 @@
 venv/
 __pycache__/
 *.pyc
+motaa_app/data/profiles.json

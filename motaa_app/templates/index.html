@@ -4,12 +4,41 @@
   <h1>ဇာတာ Data ထည့်ရန်</h1>
   <p class="muted">မွေးသက္ကရာဇ်၊ အချိန်၊ မွေးရပ်ဒေသ (Latitude/Longitude) ထည့်ပါ — Swiss Ephemeris က ဂြိုဟ်တည်နေရာများကို တိကျစွာ တွက်ပေးပါလိမ့်မည်။</p>
 
+  {% if profiles %}
+  <div class="field-group" style="margin-top:16px;">
+    <legend>သိမ်းထားသော ဇာတာများ ({{ profiles|length }})</legend>
+    <div class="table-wrap">
+    <table>
+      <tbody>
+        {% for pname in profiles %}
+        <tr>
+          <td style="text-align:left;">{{ pname }}</td>
+          <td style="white-space:nowrap;">
+            <a href="{{ url_for('load_profile', name=pname) }}" class="btn-secondary small">ဖွင့်မည်</a>
+            <form action="{{ url_for('delete_profile', name=pname) }}" method="post" style="display:inline"
+                  onsubmit="return confirm('&#39;{{ pname }}&#39; ကို ဖျက်မှာ သေချာလား?');">
+              <button type="submit" class="btn-secondary small">ဖျက်မည်</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+  {% endif %}
+
   {% set L = last or {} %}
   <form action="{{ url_for('calculate') }}" method="post" class="grid-form">
 
     <div class="field">
       <label>အမည်</label>
       <input type="text" name="name" placeholder="ဇာတာရှင် အမည်" value="{{ L.get('name', '') }}">
+    </div>
+
+    <div class="field">
+      <label>Data သိမ်းမည့် အမည် (optional — အလွတ်ထားလျှင် အထက်က အမည်ကိုသုံးမည်)</label>
+      <input type="text" name="profile_name" placeholder="ဥပမာ - ကိုဇော်မင်း">
     </div>
 
     <fieldset class="field-group">
@@ -100,7 +129,10 @@
       </select>
     </div>
 
-    <button type="submit" class="btn-primary">ဇာတာ တွက်မည်</button>
+    <div class="actions">
+      <button type="submit" class="btn-primary">ဇာတာ တွက်မည်</button>
+      <button type="submit" formaction="{{ url_for('save_profile') }}" class="btn-secondary">Data သိမ်းမည်</button>
+    </div>
   </form>
 </div>
 
