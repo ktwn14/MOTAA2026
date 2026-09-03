@@ -28,7 +28,7 @@ class BirthInput:
     longitude: float = 96.1735
     ayanamsa: str = "lahiri"
     node_mode: str = "mean"          # "mean" or "true"
-    house_system: str = "bhava_madhya"
+    house_system: str = "vequal"
     location_name: str = ""          # free-text birthplace name, display only
 
 
@@ -91,15 +91,20 @@ def _format_entry(code: str, lon: float, retro: bool, with_degree: bool):
     degree/minute (Rashi chart only — that's the only chart with room,
     and reason, to show exactly where in the sign a planet sits, not
     just which sign) plus the retrograde mark, shown everywhere a planet
-    can actually be retrograde. Callers render the two parts at
-    different font weights (see chart_svg.render_diamond_svg)."""
-    regular = ""
+    can actually be retrograde. Callers render the two parts at different
+    font weights, in two separate columns with their own fixed gap (see
+    chart_svg.render_diamond_svg) — so regular_part itself carries no
+    leading space of its own (that would just double up with the column
+    gap); a space is only used *between* degree/minute and the
+    retrograde mark, when both are present, since those are two distinct
+    pieces of information."""
+    bits = []
     if with_degree:
         amsa, lipta = motaa.amsa_lipta(lon)
-        regular = f" {amsa}°{lipta}'"
+        bits.append(f"{amsa}°{lipta}'")
     if retro:
-        regular += f" {RETROGRADE_MARK}"
-    return code, regular
+        bits.append(RETROGRADE_MARK)
+    return code, " ".join(bits)
 
 
 def _fill_sorted(content: dict, buckets: dict, retrograde: dict, with_degree: bool):

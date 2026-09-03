@@ -26,7 +26,7 @@
     <div class="chart-panel">{{ chart_svgs.navamsa|safe }}</div>
   </div>
   <p class="muted small">ရာသီ ဇယား = ရာသီ (whole-sign) အလိုက် တန့်များ။ ဘာဝ ဇယား = ရွေးထားသော ဘာဝစနစ် ({{ house_system_label(chart.input.house_system) }}) ဖြင့် တွက်ထားသော တန့်များ (ရာသီ ဇယားနှင့် အနည်းငယ် ကွဲနိုင်သည်)။ နဝင်း = D9 စိတ္တဇာတာ။
-    ဂြိုဟ်အတိုကောက် — <strong>လဂ်</strong>=လဂ်၊ <strong>၁</strong>=တနင်္ဂနွေ၊ <strong>၂</strong>=တနင်္လာ၊ <strong>၃</strong>=အင်္ဂါ၊ <strong>၄</strong>=ဗုဒ္ဓဟူး၊ <strong>၅</strong>=ကြာသပတေး၊ <strong>၆</strong>=သောကြာ၊ <strong>၀</strong>=စနေ၊ <strong>၈</strong>=ရာဟု၊ <strong>၉</strong>=ကိတ်၊ <strong>U</strong>=Uranus၊ <strong>N</strong>=Neptune၊ <strong>P</strong>=Pluto — နောက်က <strong>®️</strong> = retrograde (နာရက)။</p>
+    ဂြိုဟ်အတိုကောက် — <strong>လဂ်</strong>=လဂ်၊ <strong>၁</strong>=တနင်္ဂနွေ၊ <strong>၂</strong>=တနင်္လာ၊ <strong>၃</strong>=အင်္ဂါ၊ <strong>၄</strong>=ဗုဒ္ဓဟူး၊ <strong>၅</strong>=ကြာသပတေး၊ <strong>၆</strong>=သောကြာ၊ <strong>၀</strong>=စနေ၊ <strong>၈</strong>=ရာဟု၊ <strong>၉</strong>=ကိတ်၊ <strong>U</strong>=Uranus၊ <strong>N</strong>=Neptune၊ <strong>P</strong>=Pluto — နောက်က <strong>®️</strong> = retrograde(ဝကြ)။</p>
 </section>
 
 <section class="card">
@@ -100,7 +100,7 @@
   {% endif %}
   <div class="table-wrap">
   <table>
-    <thead><tr><th>မဟာဒသာ</th><th>အစ</th><th>အဆုံး</th><th>နှစ်ပေါင်း</th><th>အန္တရများ</th></tr></thead>
+    <thead><tr><th>မဟာဒသာ</th><th>အစ</th><th>အဆုံး</th><th>နှစ်ပေါင်း</th><th>အန္တရဒသာ</th></tr></thead>
     <tbody>
       {% for md in chart.dasha_sequence %}
       <tr>
@@ -112,7 +112,7 @@
           <details>
             <summary>ကြည့်ရန်</summary>
             <table class="sub-table">
-              <thead><tr><th>အန္တရ</th><th>အစ</th><th>အဆုံး</th><th>ပတျန္တရများ</th></tr></thead>
+              <thead><tr><th>အန္တရ</th><th>အစ</th><th>အဆုံး</th><th>ပြတန္တရဒသာ</th></tr></thead>
               {% for ad in md.antardashas %}
               <tr>
                 <td>{{ GRAHA_MM[ad.lord] }}</td>

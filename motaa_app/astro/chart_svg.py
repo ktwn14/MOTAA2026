@@ -124,6 +124,14 @@ def house_label_anchor(house: int, box: float = 300.0, pull: float = 0.32) -> Po
 
 _UNIFORM_SIZE = 6.5  # at box=300 — see text_layout_for_lines() docstring
 
+# The bold graha/lagna code is drawn a bit larger than the degree/minute
+# (and retrograde-mark) text that follows it — that text stays at
+# text_layout_for_lines()'s own `size`, only the code is scaled up by this
+# factor, so the code stays the more prominent, at-a-glance part of each
+# line without the whole line growing (which would risk the vertical-fit
+# and diagonal-collision tuning text_layout_for_lines already has).
+_CODE_SIZE_FACTOR = 1.2
+
 
 def text_layout_for_lines(n: int, box: float = 300.0) -> Tuple[float, float, float]:
     """Line-height, font-size, and anchor `pull` for a house whose text
@@ -231,22 +239,22 @@ def render_diamond_svg(house_content: Dict[int, dict], center_label: str = "",
                       f'font-size="13" font-weight="700" fill="#4f33cc">{_esc(center_label)}</text>')
 
     # planets (and the lagna marker among them) — all styled identically
-    # (same size/color) regardless of position in the list, so a
-    # multi-planet house doesn't have one line standing out from the rest.
-    # Each line is (bold_code, regular_rest): the code drawn bold in its
-    # own left-aligned column, the degree/minute/retrograde-mark that
-    # follows it drawn at normal weight starting from a second, fixed
-    # column — like a tiny 2-column table — instead of each line being
-    # independently centered as one string (which, once codes differ in
-    # width, e.g. "လဂ်" vs "၁", left the degree text "clumped" at
-    # different x per line rather than reading as a clean list). The
-    # block's column widths are sized per-house from its own longest code
-    # (see _approx_text_width_em); its horizontal position leans the same
-    # way house_label_anchor's `pull` already does — toward the triangle's
-    # open side, away from the shared diagonal (house_lean) — or, for the
-    # 4 plain Kendra houses (no diagonal to avoid), is simply centered. No
-    # rashi name or house/grid number is drawn in the house any more —
-    # see house_content's own "rashi" field if that's ever needed again.
+    # (same size/color/weight-pair) regardless of position in the list, so
+    # a multi-planet house doesn't have one line standing out from the
+    # rest. Each line is (bold_code, regular_rest): the code drawn bold,
+    # a bit larger (_CODE_SIZE_FACTOR) so it stays the at-a-glance part of
+    # the line, in its own left-aligned column; the degree/minute/
+    # retrograde-mark that follows it drawn at normal weight and size,
+    # starting from a second, fixed column with a narrow gap — like a
+    # tiny 2-column table — instead of each line being independently
+    # centered as one string (which, once codes differ in width, e.g.
+    # "လဂ်" vs "၁", left the degree text "clumped" at different x per
+    # line rather than reading as a clean list). The block's column
+    # widths are sized per-house from its own longest code (see
+    # _approx_text_width_em); the whole block is centered on
+    # house_label_anchor's own pull-biased anchor point. No rashi name or
+    # house/grid number is drawn in the house any more — see
+    # house_content's own "rashi" field if that's ever needed again.
     for h in range(1, 13):
         entry = house_content.get(h) or {}
         planets = entry.get("planets", [])
@@ -269,9 +277,10 @@ def render_diamond_svg(house_content: Dict[int, dict], center_label: str = "",
         # sits close to that vertex, which for a corner triangle is
         # always exactly on an internal grid line: the block then
         # overshot past it into the neighboring cell.)
-        gap_em = 0.4
-        code_col_em = max((_approx_text_width_em(code) for code, _ in planets), default=0.0) + gap_em
-        code_col_w = size * code_col_em
+        code_size = size * _CODE_SIZE_FACTOR
+        gap_em = 0.15
+        code_col_em = max((_approx_text_width_em(code) for code, _ in planets), default=0.0)
+        code_col_w = code_size * code_col_em + size * gap_em
         rest_w = max((size * _approx_text_width_em(rest) for _, rest in planets), default=0.0)
         block_w = code_col_w + rest_w
         x0 = anchor_x - block_w / 2.0
@@ -282,7 +291,7 @@ def render_diamond_svg(house_content: Dict[int, dict], center_label: str = "",
             rest_tspan = (f'<tspan x="{x0 + code_col_w:.1f}" font-weight="400">{_esc(rest)}</tspan>'
                           if rest else "")
             parts.append(f'<text y="{y:.1f}" font-size="{size:.1f}" fill="#1f2430">'
-                          f'<tspan x="{x0:.1f}" font-weight="700">{_esc(code)}</tspan>'
+                          f'<tspan x="{x0:.1f}" font-weight="700" font-size="{code_size:.1f}">{_esc(code)}</tspan>'
                           f'{rest_tspan}</text>')
 
     parts.append("</svg>")

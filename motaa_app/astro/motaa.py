@@ -204,7 +204,7 @@ def compute_all(grahas: Dict[str, float], lagna_lon: float, cusps: List[float]):
     """
     grahas: {"Sun": lon, "Moon": lon, ..., "Rahu": lon, "Ketu": lon}  (sidereal, degrees)
     lagna_lon: sidereal ascendant longitude, degrees
-    cusps: 12 house-start longitudes (from ephemeris.house_cusps / bhava_madhya_cusps)
+    cusps: 12 house-start longitudes (from ephemeris.house_cusps)
 
     Returns (graha_positions: dict[str,GrahaPos], bhavas: list[BhavaRow],
              rashi_to_grahamidpoint_matrix, house_matrix)

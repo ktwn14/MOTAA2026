@@ -47,8 +47,11 @@ def _parse_dms(dms_str: str, direction: str) -> float:
     return -value if direction in ("S", "W") else value
 
 
-def _decimal_to_dms(value: float, pos_dir: str, neg_dir: str) -> str:
-    """Format a signed decimal-degree float as "dd:mm:ss D" for display."""
+def _dms_parts(value: float, pos_dir: str, neg_dir: str):
+    """Same dd:mm:ss math as _decimal_to_dms, but returns (dms_str,
+    direction) as two separate values — used to prefill the birth-data
+    form, where the direction is its own <select>, not part of the same
+    text field as the degrees."""
     direction = pos_dir if value >= 0 else neg_dir
     value = abs(value)
     deg = int(value)
@@ -59,7 +62,13 @@ def _decimal_to_dms(value: float, pos_dir: str, neg_dir: str) -> str:
         sec, minute = 0, minute + 1
     if minute == 60:
         minute, deg = 0, deg + 1
-    return f"{deg}:{minute:02d}:{sec:02d} {direction}"
+    return f"{deg}:{minute:02d}:{sec:02d}", direction
+
+
+def _decimal_to_dms(value: float, pos_dir: str, neg_dir: str) -> str:
+    """Format a signed decimal-degree float as "dd:mm:ss D" for display."""
+    dms_str, direction = _dms_parts(value, pos_dir, neg_dir)
+    return f"{dms_str} {direction}"
 
 
 def _decimal_to_dms_symbols(value: float) -> str:
@@ -77,9 +86,9 @@ def _decimal_to_dms_symbols(value: float) -> str:
 
 
 def _chart_to_session_input(form) -> BirthInput:
-    hsys = form.get("house_system", "bhava_madhya")
+    hsys = form.get("house_system", "vequal")
     if hsys not in HOUSE_SYSTEMS:
-        hsys = "bhava_madhya"
+        hsys = "vequal"
     latitude = _parse_dms(form.get("latitude_dms", ""), form.get("latitude_dir", "N"))
     longitude = _parse_dms(form.get("longitude_dms", ""), form.get("longitude_dir", "E"))
     return BirthInput(
@@ -102,7 +111,17 @@ app.jinja_env.globals["house_system_label"] = lambda key: HOUSE_SYSTEM_LABEL_MAP
 
 @app.route("/", methods=["GET"])
 def index():
-    return render_template("index.html", cities=CITY_PRESETS, house_systems=HOUSE_SYSTEM_LABELS)
+    # Prefill the form from the last-computed chart's own inputs (location,
+    # ayanamsa, node mode, house system, etc.) if there is one — so
+    # recalculating a chart (or reloading this page) doesn't lose everything
+    # and reset back to the hardcoded Yangon defaults below.
+    last = session.get("last_input")
+    if last:
+        lat_dms, lat_dir = _dms_parts(last["latitude"], "N", "S")
+        lon_dms, lon_dir = _dms_parts(last["longitude"], "E", "W")
+        last = {**last, "latitude_dms": lat_dms, "latitude_dir": lat_dir,
+                "longitude_dms": lon_dms, "longitude_dir": lon_dir}
+    return render_template("index.html", cities=CITY_PRESETS, house_systems=HOUSE_SYSTEM_LABELS, last=last)
 
 
 @app.route("/calculate", methods=["POST"])

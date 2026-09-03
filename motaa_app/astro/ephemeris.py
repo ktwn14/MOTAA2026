@@ -37,14 +37,14 @@ PLANET_IDS = {
 # the classical 9-graha set above.
 OUTER_PLANET_IDS = {"Uranus": swe.URANUS, "Neptune": swe.NEPTUNE, "Pluto": swe.PLUTO}
 
-# House systems offered in the UI. "bhava_madhya" is MOTAA's own equal-house
-# system (Lagna = house-1 midpoint, computed directly, not via swe.houses_ex).
-# The rest map to real Swiss Ephemeris house-system codes (swe.houses_ex).
-# Note: swisseph's 'V' (Vehlow Equal) uses the *same* definition as MOTAA's
-# Bhava-Madhya (Ascendant at the middle of house 1), so "VEqual" should give
-# near-identical cusps to "ဘာဝစနစ်" — handy as a cross-check.
+# House systems offered in the UI, each mapped to a real Swiss Ephemeris
+# house-system code (swe.houses_ex). MOTAA's own "Bhava-Madhya" definition
+# (Ascendant at the middle of house 1) used to be offered here as its own
+# entry, computed directly rather than via swe.houses_ex — but it's
+# numerically identical to swisseph's own 'V' (Vehlow Equal), which uses
+# the exact same definition (verified: cusps match to floating-point
+# noise), so it was dropped as a redundant duplicate of "vequal" below.
 HOUSE_SYSTEMS = {
-    "bhava_madhya": None,   # handled specially, see house_cusps() below
     "vequal": b"V",
     "equal": b"E",
     "placidus": b"P",
@@ -60,7 +60,6 @@ HOUSE_SYSTEMS = {
 # the UI dropdown, the result page, and the PDF, so "vequal" always reads
 # as "VEqual (Vehlow Equal)" rather than the bare internal key.
 HOUSE_SYSTEM_LABELS = [
-    ("bhava_madhya", "ဘာဝစနစ် (MOTAA Bhava-Madhya)"),
     ("vequal", "VEqual (Vehlow Equal)"),
     ("equal", "Equal"),
     ("placidus", "Placidus"),
@@ -187,30 +186,16 @@ def sidereal_ascendant_and_cusps(jd_ut: float, lat: float, lon: float, hsys_code
     return asc, cusp_list
 
 
-def bhava_madhya_cusps(asc: float):
-    """MOTAA's own equal-house system: Ascendant = house-1 MIDPOINT, each
-    house exactly 30 deg. Returns 12 cusp (house *start*, i.e. -15 deg from
-    each house's own madhya) longitudes, in the same convention as the
-    swisseph cusps list (cusp[i] = start boundary of house i+1)."""
-    return [(asc - 15.0 + h * 30.0) % 360.0 for h in range(12)]
-
-
-def house_cusps(jd_ut: float, lat: float, lon: float, hsys: str = "bhava_madhya"):
+def house_cusps(jd_ut: float, lat: float, lon: float, hsys: str = "vequal"):
     """Returns (ascendant_deg, [12 cusp-start longitudes]) for the requested
     house system key (see HOUSE_SYSTEMS)."""
-    if hsys == "bhava_madhya":
-        # Ascendant itself still needs a reference chart; Placidus is used
-        # only to obtain the raw Ascendant point (house SHAPE is then
-        # overridden to be equal 30 deg from that point, matching MOTAA).
-        asc, _ = sidereal_ascendant_and_cusps(jd_ut, lat, lon, b"P")
-        return asc, bhava_madhya_cusps(asc)
     code = HOUSE_SYSTEMS.get(hsys, b"P")
     return sidereal_ascendant_and_cusps(jd_ut, lat, lon, code)
 
 
 def compute_chart_longitudes(local_dt: datetime, tz_offset_hours: float,
                               lat: float, lon: float, ayanamsa: str = "lahiri",
-                              node_mode: str = "mean", hsys: str = "bhava_madhya"):
+                              node_mode: str = "mean", hsys: str = "vequal"):
     """One-stop convenience call used by astro/charts.py."""
     configure(ayanamsa)
     jd_ut = to_julian_ut(local_dt, tz_offset_hours)

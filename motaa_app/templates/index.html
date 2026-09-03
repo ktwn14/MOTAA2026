@@ -4,28 +4,29 @@
   <h1>ဇာတာ Data ထည့်ရန်</h1>
   <p class="muted">မွေးသက္ကရာဇ်၊ အချိန်၊ မွေးရပ်ဒေသ (Latitude/Longitude) ထည့်ပါ — Swiss Ephemeris က ဂြိုဟ်တည်နေရာများကို တိကျစွာ တွက်ပေးပါလိမ့်မည်။</p>
 
+  {% set L = last or {} %}
   <form action="{{ url_for('calculate') }}" method="post" class="grid-form">
 
     <div class="field">
       <label>အမည်</label>
-      <input type="text" name="name" placeholder="ဇာတာရှင် အမည်">
+      <input type="text" name="name" placeholder="ဇာတာရှင် အမည်" value="{{ L.get('name', '') }}">
     </div>
 
     <fieldset class="field-group">
       <legend>မွေးနေ့</legend>
       <div class="inline-fields">
-        <input type="number" name="year" placeholder="နှစ် (e.g. 1990)" min="1800" max="2200" required>
-        <input type="number" name="month" placeholder="လ (1-12)" min="1" max="12" required>
-        <input type="number" name="day" placeholder="ရက် (1-31)" min="1" max="31" required>
+        <input type="number" name="year" placeholder="နှစ် (e.g. 1990)" min="1800" max="2200" required value="{{ L.get('year', '') }}">
+        <input type="number" name="month" placeholder="လ (1-12)" min="1" max="12" required value="{{ L.get('month', '') }}">
+        <input type="number" name="day" placeholder="ရက် (1-31)" min="1" max="31" required value="{{ L.get('day', '') }}">
       </div>
     </fieldset>
 
     <fieldset class="field-group">
       <legend>မွေးချိန် (24-hr, ဒေသစံတော်ချိန်)</legend>
       <div class="inline-fields">
-        <input type="number" name="hour" placeholder="နာရီ (0-23)" min="0" max="23" required>
-        <input type="number" name="minute" placeholder="မိနစ်" min="0" max="59" required>
-        <input type="number" name="second" placeholder="စက္ကန့် (optional)" min="0" max="59" value="0">
+        <input type="number" name="hour" placeholder="နာရီ (0-23)" min="0" max="23" required value="{{ L.get('hour', '') }}">
+        <input type="number" name="minute" placeholder="မိနစ်" min="0" max="59" required value="{{ L.get('minute', '') }}">
+        <input type="number" name="second" placeholder="စက္ကန့် (optional)" min="0" max="59" value="{{ L.get('second', 0) }}">
       </div>
     </fieldset>
 
@@ -40,46 +41,46 @@
 
     <div class="field">
       <label>မွေးရပ်ဒေသ အမည် (Location name)</label>
-      <input type="text" id="location_name" name="location_name" placeholder="ဥပမာ - ရန်ကုန်၊ ပြင်ဦးလွင်" value="ရန်ကုန် (Yangon)">
+      <input type="text" id="location_name" name="location_name" placeholder="ဥပမာ - ရန်ကုန်၊ ပြင်ဦးလွင်" value="{{ L.get('location_name') or 'ရန်ကုန် (Yangon)' }}">
     </div>
 
     <fieldset class="field-group">
       <legend>တည်နေရာ (Latitude / Longitude — dd:mm:ss) နှင့် Time Zone</legend>
       <div class="inline-fields">
         <input type="text" id="latitude_dms" name="latitude_dms" placeholder="Latitude dd:mm:ss e.g. 16:50:27"
-               value="16:50:27" pattern="^\d{1,3}:\d{1,2}:\d{1,2}(\.\d+)?$" required>
+               value="{{ L.get('latitude_dms', '16:50:27') }}" pattern="^\d{1,3}:\d{1,2}:\d{1,2}(\.\d+)?$" required>
         <select id="latitude_dir" name="latitude_dir">
-          <option value="N" selected>N</option>
-          <option value="S">S</option>
+          <option value="N" {{ 'selected' if L.get('latitude_dir', 'N') == 'N' }}>N</option>
+          <option value="S" {{ 'selected' if L.get('latitude_dir') == 'S' }}>S</option>
         </select>
       </div>
       <div class="inline-fields" style="margin-top:8px;">
         <input type="text" id="longitude_dms" name="longitude_dms" placeholder="Longitude dd:mm:ss e.g. 96:10:25"
-               value="96:10:25" pattern="^\d{1,3}:\d{1,2}:\d{1,2}(\.\d+)?$" required>
+               value="{{ L.get('longitude_dms', '96:10:25') }}" pattern="^\d{1,3}:\d{1,2}:\d{1,2}(\.\d+)?$" required>
         <select id="longitude_dir" name="longitude_dir">
-          <option value="E" selected>E</option>
-          <option value="W">W</option>
+          <option value="E" {{ 'selected' if L.get('longitude_dir', 'E') == 'E' }}>E</option>
+          <option value="W" {{ 'selected' if L.get('longitude_dir') == 'W' }}>W</option>
         </select>
       </div>
       <div class="inline-fields" style="margin-top:8px;">
-        <input type="number" step="0.25" id="tz_offset_hours" name="tz_offset_hours" placeholder="UTC offset (hr)" value="6.5" required>
+        <input type="number" step="0.25" id="tz_offset_hours" name="tz_offset_hours" placeholder="UTC offset (hr)" value="{{ L.get('tz_offset_hours', 6.5) }}" required>
       </div>
     </fieldset>
 
     <div class="field">
       <label>Ayanamsa</label>
       <select name="ayanamsa">
-        <option value="lahiri" selected>Lahiri (MOTAA/ Myanmar စံ)</option>
-        <option value="raman">Raman</option>
-        <option value="krishnamurti">Krishnamurti (KP)</option>
+        <option value="lahiri" {{ 'selected' if L.get('ayanamsa', 'lahiri') == 'lahiri' }}>Lahiri (MOTAA/ Myanmar စံ)</option>
+        <option value="raman" {{ 'selected' if L.get('ayanamsa') == 'raman' }}>Raman</option>
+        <option value="krishnamurti" {{ 'selected' if L.get('ayanamsa') == 'krishnamurti' }}>Krishnamurti (KP)</option>
       </select>
     </div>
 
     <div class="field">
       <label>ရာဟု/ကိတ် တွက်နည်း</label>
       <select name="node_mode">
-        <option value="mean" selected>Mean Node (ရိုးရာ)</option>
-        <option value="true">True Node</option>
+        <option value="mean" {{ 'selected' if L.get('node_mode', 'mean') == 'mean' }}>Mean Node (ရိုးရာ)</option>
+        <option value="true" {{ 'selected' if L.get('node_mode') == 'true' }}>True Node</option>
       </select>
     </div>
 
@@ -87,7 +88,7 @@
       <label>ဘာဝ စံနစ် (House System)</label>
       <select name="house_system">
         {% for key, label in house_systems %}
-        <option value="{{ key }}" {{ 'selected' if key=='bhava_madhya' }}>{{ label }}</option>
+        <option value="{{ key }}" {{ 'selected' if key == L.get('house_system', 'vequal') }}>{{ label }}</option>
         {% endfor %}
       </select>
     </div>

@@ -28,7 +28,8 @@ from reportlab.graphics.shapes import Drawing, Polygon, Line, String
 from reportlab.graphics import renderPM
 
 from astro.constants import GRAHA_MM, RASHI_MM, GRAHA9
-from astro.chart_svg import house_polygons, house_label_anchor, center_box, text_layout_for_lines
+from astro.chart_svg import (house_polygons, house_label_anchor, center_box, text_layout_for_lines,
+                              _CODE_SIZE_FACTOR)
 from astro.ephemeris import HOUSE_SYSTEM_LABEL_MAP
 
 _APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -138,15 +139,17 @@ def _dms_sym(value: float) -> str:
     return f"{deg}°{minute:02d}'{sec:02d}\""
 
 
-def _add_column_row(d, x0, y, code, rest, code_col_w, size, color):
-    """Draws `code` (FONT_NAME_BOLD) at x0, and `rest` (FONT_NAME) at a
-    second, fixed column x0+code_col_w — like a tiny 2-column table, so a
-    multi-line house's degree/minute text lines up in a clean column
-    instead of each line being independently re-centered (see the
-    matching comment in chart_svg.render_diamond_svg). reportlab's
-    graphics String has no rich-text/run concept, so this just places two
-    separate String shapes."""
-    d.add(String(x0, y, code, fontName=FONT_NAME_BOLD, fontSize=size,
+def _add_column_row(d, x0, y, code, rest, code_col_w, code_size, size, color):
+    """Draws `code` (FONT_NAME_BOLD, at `code_size` — a bit larger than the
+    rest of the line, see _CODE_SIZE_FACTOR) at x0, and `rest` (FONT_NAME,
+    at `size`) at a second, fixed column x0+code_col_w — like a tiny
+    2-column table, so a multi-line house's degree/minute text lines up
+    in a clean column instead of each line being independently
+    re-centered (see the matching comment in
+    chart_svg.render_diamond_svg). reportlab's graphics String has no
+    rich-text/run concept, so this just places two separate String
+    shapes."""
+    d.add(String(x0, y, code, fontName=FONT_NAME_BOLD, fontSize=code_size,
                   fillColor=color, textAnchor="start"))
     if rest:
         d.add(String(x0 + code_col_w, y, rest, fontName=FONT_NAME, fontSize=size,
@@ -174,15 +177,17 @@ def _diamond_drawing(house_content, title, box=260):
         d.add(p)
 
     # planets (and the lagna marker among them) — all styled identically
-    # (same size/color) regardless of position in the list, so a
-    # multi-planet house doesn't have one line standing out from the rest.
-    # Each line is (bold_code, regular_rest) laid out as a tiny 2-column
-    # table (see _add_column_row) — code left-aligned in its own column,
-    # degree/minute/retrograde-mark starting from a second, fixed column —
-    # rather than each line independently centered as one string, which
-    # left the degree text at a different x per line once codes differed
-    # in width (e.g. "လဂ်" vs "၁"). Column widths are measured exactly via
-    # pdfmetrics (unlike the web SVG counterpart, which has to estimate).
+    # (same size/color/weight pair) regardless of position in the list, so
+    # a multi-planet house doesn't have one line standing out from the
+    # rest. Each line is (bold_code, regular_rest) laid out as a tiny
+    # 2-column table (see _add_column_row) — code left-aligned in its own
+    # column at code_size (a bit larger, _CODE_SIZE_FACTOR), degree/minute/
+    # retrograde-mark starting from a second, fixed column at the regular
+    # `size` — rather than each line independently centered as one string,
+    # which left the degree text at a different x per line once codes
+    # differed in width (e.g. "လဂ်" vs "၁"). Column widths are measured
+    # exactly via pdfmetrics (unlike the web SVG counterpart, which has to
+    # estimate).
     # The whole 2-column block is centered on the same pull-biased anchor
     # house_label_anchor already computes — same horizontal footprint as
     # the single centered string this replaces (an earlier version instead
@@ -204,8 +209,9 @@ def _diamond_drawing(house_content, title, box=260):
         start_y = min(start_y, box - pad)
         start_y = max(start_y, pad + max(n - 1, 0) * line_h)
 
-        gap = size * 0.4
-        code_col_w = max((pdfmetrics.stringWidth(code, FONT_NAME_BOLD, size) for code, _ in planets),
+        code_size = size * _CODE_SIZE_FACTOR
+        gap = size * 0.15
+        code_col_w = max((pdfmetrics.stringWidth(code, FONT_NAME_BOLD, code_size) for code, _ in planets),
                           default=0.0) + gap
         rest_w = max((pdfmetrics.stringWidth(rest, FONT_NAME, size) for _, rest in planets),
                      default=0.0)
@@ -215,7 +221,7 @@ def _diamond_drawing(house_content, title, box=260):
 
         for i, (code, rest) in enumerate(planets):
             y = start_y - i * line_h
-            _add_column_row(d, x0, flip(y), code, rest, code_col_w, size, colors.HexColor("#1f2430"))
+            _add_column_row(d, x0, flip(y), code, rest, code_col_w, code_size, size, colors.HexColor("#1f2430"))
     return d
 
 
