@@ -336,6 +336,24 @@ def generate_pdf(chart, diamonds=None) -> io.BytesIO:
         story.append(dt)
         story.append(Spacer(1, 10))
 
+    # --- Nakshatra-wise table ---
+    story.append(_P("နက္ခတ်စီး ဇယား", h2))
+    nak_header = ["ပြိုလ်", "ဒီဂရီ", "ရာသီ", "ဓာတ်", "နက္ခတ်", "နက္ခတ်သခင်",
+                  "မိတ်/ရန်", "ဘာဝသခင်", "နဝင်းသခင်", "နဝင်းမိတ်/ရန်"]
+    nak_rows = [nak_header]
+    for row in chart["nakshatra_table"]:
+        label = "လဂ်" if row.name == "Lagna" else GRAHA_MM[row.name]
+        nak_rows.append([
+            label, f"{row.amsa}°{row.lipta}'", RASHI_MM[row.rashi_idx - 1],
+            f"{row.motion}/{row.element}", f"{row.nakshatra_mm} {row.nakshatra_pada}",
+            GRAHA_MM[row.nakshatra_lord], row.friend_enemy, GRAHA_MM[row.bhava_lord],
+            GRAHA_MM[row.navamsa_lord], row.navamsa_friend_enemy,
+        ])
+    tn = Table(_reorder_rows(nak_rows), repeatRows=1)
+    tn.setStyle(_table_style(small=True))
+    story.append(tn)
+    story.append(Spacer(1, 14))
+
     # --- Planet strength table ---
     story.append(_P("ဂြိုဟ် အင်အား (MOTAA Step 1-6)", h2))
     header = ["ဂြိုဟ်", "ရာသီ", "အံသာ", "လိတ္တာ", "တန့်", "ကာရက", "S1", "S2", "S3", "S4", "S5", "S6", "နောက်ဆုံး"]

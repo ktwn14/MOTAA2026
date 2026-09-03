@@ -18,6 +18,15 @@ RASHI_EN = ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
 RASHI_LORD = ["Mars", "Venus", "Mercury", "Moon", "Sun", "Mercury",
               "Venus", "Mars", "Jupiter", "Saturn", "Saturn", "Jupiter"]
 
+# Motion (chara/movable, sthira/fixed, dwiswabhava/dual) and element
+# (tejo/fire, prithvi/earth, vayo/air, apas/water), both a fixed classical
+# property of the SIGN itself (independent of which planet occupies it) —
+# each cycles every 3 signs starting from Mesha/Aries.
+RASHI_MOTION = ["စရ", "ထိရ", "ဒွေးဒဟ", "စရ", "ထိရ", "ဒွေးဒဟ",
+                "စရ", "ထိရ", "ဒွေးဒဟ", "စရ", "ထိရ", "ဒွေးဒဟ"]
+RASHI_ELEMENT = ["တေဇော", "ပထဝီ", "ဝါယော", "အာပေါ", "တေဇော", "ပထဝီ",
+                  "ဝါယော", "အာပေါ", "တေဇော", "ပထဝီ", "ဝါယော", "အာပေါ"]
+
 # ---------------------------------------------------------------------------
 # Grahas
 # ---------------------------------------------------------------------------

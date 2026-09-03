@@ -11,7 +11,9 @@ from . import ephemeris
 from . import motaa
 from . import dasha
 from .constants import (GRAHA9, GRAHA_MM, GRAHA_SHORT, RASHI_MM,
-                         OUTER_PLANETS, OUTER_PLANET_SHORT, LAGNA_SHORT)
+                         OUTER_PLANETS, OUTER_PLANET_SHORT, LAGNA_SHORT,
+                         RASHI_LORD, RASHI_MOTION, RASHI_ELEMENT, FRIENDSHIP,
+                         NAKSHATRA_SPAN)
 
 
 @dataclass
@@ -62,7 +64,7 @@ def build_chart(binput: BirthInput):
     navamsa_lagna_idx = motaa.navamsa_rashi_index(lagna_lon)
     navamsa_grahas = {name: motaa.navamsa_rashi_index(lon) for name, lon in grahas.items()}
 
-    return {
+    chart = {
         "input": binput,
         "local_dt": local_dt,
         "jd_ut": eph["jd_ut"],
@@ -82,6 +84,90 @@ def build_chart(binput: BirthInput):
         "navamsa_lagna_idx": navamsa_lagna_idx,
         "navamsa_grahas": navamsa_grahas,
     }
+    chart["nakshatra_table"] = build_nakshatra_table(chart)
+    return chart
+
+
+@dataclass
+class NakshatraRow:
+    """One row of the "နက္ခတ်စီး" reference table — Lagna or one graha.
+    `name` is the English key ("Sun", ... ) or "Lagna"; callers map that
+    through GRAHA_MM/GRAHA_SHORT (or a dedicated Lagna label) for
+    display, same convention used throughout this module. `motion`/
+    `element` are the occupied RASHI's own fixed classification (chara/
+    sthira/dwiswabhava, and tejo/prithvi/vayo/apas — see
+    constants.RASHI_MOTION/RASHI_ELEMENT); `friend_enemy` and
+    `navamsa_friend_enemy` are this graha's classical (Naisargika
+    Maitri) relationship to its own nakshatra lord / Navamsa-sign lord
+    respectively — "-" for Lagna (not a graha), Rahu/Ketu (not part of
+    that classical table), or a graha ruling over itself."""
+    name: str
+    lon: float
+    rashi_idx: int
+    amsa: int
+    lipta: int
+    motion: str
+    element: str
+    nakshatra_mm: str
+    nakshatra_pada: int
+    nakshatra_lord: str
+    friend_enemy: str
+    bhava_lord: str
+    navamsa_idx: int
+    navamsa_lord: str
+    navamsa_friend_enemy: str
+
+
+def _friend_enemy(graha: str, lord: str) -> str:
+    """MOTAA's simplified two-way (friend/enemy/neutral) relationship
+    between a graha and another graha (here, always a nakshatra's or
+    Navamsa sign's lord) — via the classical Naisargika Maitri table
+    (constants.FRIENDSHIP, already used for MOTAA's own Step 1-6 karaka
+    classification elsewhere in this app). "-" when there's no
+    meaningful verdict: `graha` ruling over itself, or `graha` not being
+    one of the 7 classical grahas that table covers (Lagna isn't a graha
+    at all; Rahu/Ketu's natural friendships aren't part of it either —
+    nor used anywhere else in this codebase)."""
+    if graha == lord or graha not in FRIENDSHIP:
+        return "-"
+    rel = FRIENDSHIP[graha]
+    if lord in rel["friend"]:
+        return "မိတ်"
+    if lord in rel["enemy"]:
+        return "ရန်"
+    return "အလယ်"
+
+
+def _nakshatra_row(name: str, lon: float, house_lord: str) -> NakshatraRow:
+    r_idx = motaa.rashi_index(lon)
+    amsa, lipta = motaa.amsa_lipta(lon)
+    _idx, _en, nak_mm, nak_lord, _frac = dasha.nakshatra_of(lon)
+    pada = int((lon % NAKSHATRA_SPAN) / (NAKSHATRA_SPAN / 4.0)) + 1
+    nav_idx = motaa.navamsa_rashi_index(lon)
+    nav_lord = RASHI_LORD[nav_idx - 1]
+    return NakshatraRow(
+        name=name, lon=lon, rashi_idx=r_idx, amsa=amsa, lipta=lipta,
+        motion=RASHI_MOTION[r_idx - 1], element=RASHI_ELEMENT[r_idx - 1],
+        nakshatra_mm=nak_mm, nakshatra_pada=pada, nakshatra_lord=nak_lord,
+        friend_enemy=_friend_enemy(name, nak_lord),
+        bhava_lord=house_lord,
+        navamsa_idx=nav_idx, navamsa_lord=nav_lord,
+        navamsa_friend_enemy=_friend_enemy(name, nav_lord),
+    )
+
+
+def build_nakshatra_table(chart: dict):
+    """The "နက္ခတ်စီး" reference table: one NakshatraRow for Lagna, then
+    one for each of the 9 classical grahas, in GRAHA9 order."""
+    positions = chart["positions"]
+    bhavas = chart["bhavas"]
+    lagna_house_lord = RASHI_LORD[chart["lagna_rashi_idx"] - 1]
+    rows = [_nakshatra_row("Lagna", chart["lagna_lon"], lagna_house_lord)]
+    for name in GRAHA9:
+        gp = positions[name]
+        house_lord = bhavas[gp.house - 1].lord
+        rows.append(_nakshatra_row(name, gp.lon, house_lord))
+    return rows
 
 
 def _empty_slots():

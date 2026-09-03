@@ -30,6 +30,34 @@
 </section>
 
 <section class="card">
+  <h2>နက္ခတ်စီး ဇယား</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr>
+      <th>ပြိုလ်</th><th>ဒီဂရီ</th><th>ရာသီ</th><th>ဓာတ်</th><th>နက္ခတ်</th><th>နက္ခတ်သခင်</th>
+      <th>မိတ်/ရန်</th><th>ဘာဝသခင်</th><th>နဝင်းသခင်</th><th>နဝင်းမိတ်/ရန်</th>
+    </tr></thead>
+    <tbody>
+      {% for row in chart.nakshatra_table %}
+      <tr>
+        <td>{{ 'လဂ်' if row.name == 'Lagna' else GRAHA_MM[row.name] }}</td>
+        <td>{{ row.amsa }}°{{ row.lipta }}'</td>
+        <td>{{ RASHI_MM[row.rashi_idx-1] }}</td>
+        <td>{{ row.motion }}/{{ row.element }}</td>
+        <td>{{ row.nakshatra_mm }} {{ row.nakshatra_pada }}</td>
+        <td>{{ GRAHA_MM[row.nakshatra_lord] }}</td>
+        <td>{{ row.friend_enemy }}</td>
+        <td>{{ GRAHA_MM[row.bhava_lord] }}</td>
+        <td>{{ GRAHA_MM[row.navamsa_lord] }}</td>
+        <td>{{ row.navamsa_friend_enemy }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="card">
   <h2>ဂြိုဟ် အင်အား (PlanetStrength — MOTAA Step 1-6)</h2>
   <div class="table-wrap">
   <table>
