@@ -49,7 +49,7 @@ def build_chart(binput: BirthInput):
     positions, bhavas, rashi_matrix, house_matrix = motaa.compute_all(grahas, lagna_lon, cusps)
 
     seq = dasha.compute_vimshottari(grahas["Moon"], local_dt, span_years=120)
-    md, ad = dasha.dasha_running_at(seq, datetime.now())
+    md, ad, pd = dasha.dasha_running_at(seq, datetime.now())
 
     lagna_rashi_idx = motaa.rashi_index(lagna_lon)
 
@@ -72,7 +72,7 @@ def build_chart(binput: BirthInput):
         "positions": positions,
         "bhavas": bhavas,
         "dasha_sequence": seq,
-        "dasha_now": {"maha": md, "antar": ad},
+        "dasha_now": {"maha": md, "antar": ad, "pratyantar": pd},
         "navamsa_lagna_idx": navamsa_lagna_idx,
         "navamsa_grahas": navamsa_grahas,
     }

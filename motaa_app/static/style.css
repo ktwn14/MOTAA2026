@@ -53,7 +53,6 @@ input, select {
 }
 
 .result-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
-.lagna-line { font-size: 1.05rem; margin-top: 8px; }
 .actions { display: flex; gap: 10px; }
 
 .table-wrap { overflow-x: auto; }

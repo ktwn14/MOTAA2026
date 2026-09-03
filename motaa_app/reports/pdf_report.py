@@ -138,19 +138,18 @@ def _dms_sym(value: float) -> str:
     return f"{deg}°{minute:02d}'{sec:02d}\""
 
 
-def _add_mixed_text(d, cx, y, bold_part, regular_part, size, color):
-    """Draws `bold_part` (FONT_NAME_BOLD) immediately followed by
-    `regular_part` (FONT_NAME), the pair centered as one unit at x=cx.
-    reportlab's graphics String has no rich-text/run concept (unlike the
-    web SVG's <tspan>), so this measures each part's width and places two
-    separate String shapes side by side instead."""
-    bold_w = pdfmetrics.stringWidth(bold_part, FONT_NAME_BOLD, size)
-    reg_w = pdfmetrics.stringWidth(regular_part, FONT_NAME, size) if regular_part else 0.0
-    x0 = cx - (bold_w + reg_w) / 2.0
-    d.add(String(x0, y, bold_part, fontName=FONT_NAME_BOLD, fontSize=size,
+def _add_column_row(d, x0, y, code, rest, code_col_w, size, color):
+    """Draws `code` (FONT_NAME_BOLD) at x0, and `rest` (FONT_NAME) at a
+    second, fixed column x0+code_col_w — like a tiny 2-column table, so a
+    multi-line house's degree/minute text lines up in a clean column
+    instead of each line being independently re-centered (see the
+    matching comment in chart_svg.render_diamond_svg). reportlab's
+    graphics String has no rich-text/run concept, so this just places two
+    separate String shapes."""
+    d.add(String(x0, y, code, fontName=FONT_NAME_BOLD, fontSize=size,
                   fillColor=color, textAnchor="start"))
-    if regular_part:
-        d.add(String(x0 + bold_w, y, regular_part, fontName=FONT_NAME, fontSize=size,
+    if rest:
+        d.add(String(x0 + code_col_w, y, rest, fontName=FONT_NAME, fontSize=size,
                       fillColor=color, textAnchor="start"))
 
 
@@ -174,17 +173,25 @@ def _diamond_drawing(house_content, title, box=260):
                      fillColor=colors.HexColor("#fffdf7"))
         d.add(p)
 
-    # planets (and the lagna marker among them) — centered, and all styled
-    # identically (same size/color) regardless of position in the list, so
-    # a multi-planet house doesn't have one line standing out from the
-    # rest. Each line is (bold_code, regular_rest) — the code drawn bold,
-    # the degree/minute/retrograde-mark that follows it drawn at normal
-    # weight (see _add_mixed_text). No rashi name or house number is
-    # drawn any more. Crowded (3+ planet) houses get smaller text and
-    # lean further toward their triangle's outer tip, so the block
-    # shrinks and moves away from the shared diagonal instead of
-    # overlapping the neighboring house's text (see
-    # chart_svg.text_layout_for_lines).
+    # planets (and the lagna marker among them) — all styled identically
+    # (same size/color) regardless of position in the list, so a
+    # multi-planet house doesn't have one line standing out from the rest.
+    # Each line is (bold_code, regular_rest) laid out as a tiny 2-column
+    # table (see _add_column_row) — code left-aligned in its own column,
+    # degree/minute/retrograde-mark starting from a second, fixed column —
+    # rather than each line independently centered as one string, which
+    # left the degree text at a different x per line once codes differed
+    # in width (e.g. "လဂ်" vs "၁"). Column widths are measured exactly via
+    # pdfmetrics (unlike the web SVG counterpart, which has to estimate).
+    # The whole 2-column block is centered on the same pull-biased anchor
+    # house_label_anchor already computes — same horizontal footprint as
+    # the single centered string this replaces (an earlier version instead
+    # grew the block in one direction from the anchor, toward the
+    # triangle's open vertex, but that roughly doubles the anchor's old
+    # single-line reach; since a crowded house's anchor already sits close
+    # to that vertex — always exactly on an internal grid line for a
+    # corner triangle — the block overshot into the neighboring cell). No
+    # rashi name or house number is drawn any more.
     for h in range(1, 13):
         entry = house_content.get(h) or {}
         planets = entry.get("planets", [])
@@ -196,9 +203,19 @@ def _diamond_drawing(house_content, title, box=260):
         start_y = ay + (n - 1) * line_h / 2.0
         start_y = min(start_y, box - pad)
         start_y = max(start_y, pad + max(n - 1, 0) * line_h)
+
+        gap = size * 0.4
+        code_col_w = max((pdfmetrics.stringWidth(code, FONT_NAME_BOLD, size) for code, _ in planets),
+                          default=0.0) + gap
+        rest_w = max((pdfmetrics.stringWidth(rest, FONT_NAME, size) for _, rest in planets),
+                     default=0.0)
+        block_w = code_col_w + rest_w
+        x0 = ax - block_w / 2.0
+        x0 = max(pad, min(x0, box - pad - block_w))
+
         for i, (code, rest) in enumerate(planets):
             y = start_y - i * line_h
-            _add_mixed_text(d, ax, flip(y), code, rest, size, colors.HexColor("#1f2430"))
+            _add_column_row(d, x0, flip(y), code, rest, code_col_w, size, colors.HexColor("#1f2430"))
     return d
 
 
@@ -213,14 +230,15 @@ def generate_pdf(chart, diamonds=None) -> io.BytesIO:
     binput = chart["input"]
     story.append(Paragraph(f"MOTAA ဇာတာ အစီရင်ခံစာ — {binput.name}", h1))
     location_bit = f"{binput.location_name} &nbsp;·&nbsp; " if binput.location_name else ""
-    meta = (f"{chart['local_dt'].strftime('%Y-%m-%d %H:%M:%S')} "
+    meta = (f"{chart['local_dt'].strftime('%Y-%m-%d')} ({chart['local_dt'].strftime('%a')}) "
+            f"{chart['local_dt'].strftime('%H:%M:%S')} "
             f"(UTC{'+' if binput.tz_offset_hours >= 0 else ''}{binput.tz_offset_hours}) &nbsp;·&nbsp; "
             f"{location_bit}"
             f"Lat {_dms(binput.latitude, 'N', 'S')}, Lon {_dms(binput.longitude, 'E', 'W')} &nbsp;·&nbsp; "
-            f"Ayanamsa: {binput.ayanamsa} ({_dms_sym(chart['ayanamsa_value'])}) &nbsp;·&nbsp; "
-            f"House system: {HOUSE_SYSTEM_LABEL_MAP.get(binput.house_system, binput.house_system)}")
+            f"Ayanamsa: {binput.ayanamsa} ({_dms_sym(chart['ayanamsa_value'])})")
     story.append(Paragraph(meta, muted))
-    story.append(Paragraph(f"လဂ် — <b>{chart['lagna_rashi_mm']}</b> {chart['lagna_lon'] % 30:.4f}&deg;", body))
+    story.append(Paragraph(f"လဂ် — <b>{chart['lagna_rashi_mm']}</b> ({_dms_sym(chart['lagna_lon'] % 30)}) &nbsp;·&nbsp; "
+                            f"House system: {HOUSE_SYSTEM_LABEL_MAP.get(binput.house_system, binput.house_system)}", muted))
     story.append(Spacer(1, 10))
 
     if diamonds:

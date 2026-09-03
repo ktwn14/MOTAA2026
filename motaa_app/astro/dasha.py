@@ -30,12 +30,22 @@ YEAR_DAYS = 365.2425  # civil (Gregorian) year length used for Dasha date math
 
 
 @dataclass
+class PratyantarDasha:
+    lord: str
+    lord_mm: str
+    start: datetime
+    end: datetime
+    years: float
+
+
+@dataclass
 class AntarDasha:
     lord: str
     lord_mm: str
     start: datetime
     end: datetime
     years: float
+    pratyantardashas: List["PratyantarDasha"] = field(default_factory=list)
 
 
 @dataclass
@@ -119,17 +129,50 @@ def _antardashas(md: MahaDasha, full_years_used_for_proportion: float,
         full_antar_years = (full_years_used_for_proportion * VIMSHOTTARI_YEARS[alord]) / VIMSHOTTARI_TOTAL
         antar_years = full_antar_years * balance_fraction
         end = _add_years(cursor, antar_years)
-        out.append(AntarDasha(lord=alord, lord_mm=GRAHA_MM[alord], start=cursor, end=end, years=antar_years))
+        ad = AntarDasha(lord=alord, lord_mm=GRAHA_MM[alord], start=cursor, end=end, years=antar_years)
+        ad.pratyantardashas = _pratyantardashas(ad)
+        out.append(ad)
+        cursor = end
+    return out
+
+
+def _pratyantardashas(ad: AntarDasha) -> List[PratyantarDasha]:
+    """
+    Sub-divide one Antardasha into its 9 Pratyantardashas (the next level
+    down), using the same classical proportional-cycle rule as Mahadasha ->
+    Antardasha: (Antardasha_years * Pratyantardasha_lord_years) / 120,
+    cycling the 9-lord sequence starting from the Antardasha's own lord.
+
+    Unlike _antardashas() above, this needs no separate balance_fraction
+    handling: the 9 fractions (VIMSHOTTARI_YEARS[lord] / VIMSHOTTARI_TOTAL)
+    always sum to exactly 1, so dividing `ad.years` by them exactly
+    reproduces ad.years regardless of whether it's a full or a partial
+    (birth-balance) Antardasha.
+    """
+    start_pos = DASHA_LORD_CYCLE.index(ad.lord)
+    cursor = ad.start
+    out = []
+    for j in range(9):
+        plord = DASHA_LORD_CYCLE[(start_pos + j) % 9]
+        praty_years = (ad.years * VIMSHOTTARI_YEARS[plord]) / VIMSHOTTARI_TOTAL
+        end = _add_years(cursor, praty_years)
+        out.append(PratyantarDasha(lord=plord, lord_mm=GRAHA_MM[plord], start=cursor, end=end, years=praty_years))
         cursor = end
     return out
 
 
 def dasha_running_at(sequence: List[MahaDasha], when: datetime):
-    """Return (MahaDasha, AntarDasha) active at a given datetime, or (None, None)."""
+    """Return (MahaDasha, AntarDasha, PratyantarDasha) active at a given
+    datetime, or (None, None, None)."""
     for md in sequence:
         if md.start <= when < md.end:
             for ad in md.antardashas:
                 if ad.start <= when < ad.end:
-                    return md, ad
-            return md, md.antardashas[-1] if md.antardashas else None
-    return None, None
+                    for pd in ad.pratyantardashas:
+                        if pd.start <= when < pd.end:
+                            return md, ad, pd
+                    return md, ad, (ad.pratyantardashas[-1] if ad.pratyantardashas else None)
+            last_ad = md.antardashas[-1] if md.antardashas else None
+            last_pd = last_ad.pratyantardashas[-1] if last_ad and last_ad.pratyantardashas else None
+            return md, last_ad, last_pd
+    return None, None, None

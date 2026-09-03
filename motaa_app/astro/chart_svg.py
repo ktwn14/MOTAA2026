@@ -122,28 +122,58 @@ def house_label_anchor(house: int, box: float = 300.0, pull: float = 0.32) -> Po
     return _corner_point(house, poly, box, pull)
 
 
+_UNIFORM_SIZE = 6.5  # at box=300 — see text_layout_for_lines() docstring
+
+
 def text_layout_for_lines(n: int, box: float = 300.0) -> Tuple[float, float, float]:
     """Line-height, font-size, and anchor `pull` for a house whose text
-    block has `n` lines, scaled to `box`. Houses with more planets
-    stacked in them get smaller/tighter text *and* a stronger pull toward
-    their triangle's outer vertex, so the block both shrinks and leans
-    away from the shared diagonal instead of overrunning it or bleeding
-    into the neighboring house's own text. Tiers go all the way down
-    through n=6+ (rather than flattening out after n=4) because a
-    4-5-planet house is a real, if uncommon, case — not just a
-    theoretical one — and needs to keep shrinking to stay legible."""
+    block has `n` lines, scaled to `box`. Font *size* is fixed — the same
+    for every house regardless of its own planet count — sized so that
+    even the crowded (5-planet-or-more) case stays legible; a 1-planet
+    house's text isn't drawn bigger than a crowded neighbor's, so the
+    chart doesn't read as visually inconsistent from house to house. What
+    still varies with `n` is line-height (tighter stacking for more
+    lines, so they fit the triangle vertically) and anchor `pull` (a
+    crowded house leans harder toward its triangle's outer vertex, so the
+    block both shrinks its line spacing and leans away from the shared
+    diagonal instead of overrunning it or bleeding into the neighboring
+    house's own text)."""
     scale = box / 300.0
     if n <= 2:
-        line_h, size, pull = 13.0, 11.0, 0.32
+        line_h, pull = 9.5, 0.30
     elif n == 3:
-        line_h, size, pull = 10.0, 9.0, 0.30
+        line_h, pull = 8.0, 0.28
     elif n == 4:
-        line_h, size, pull = 8.0, 7.5, 0.26
+        line_h, pull = 7.0, 0.26
     elif n == 5:
-        line_h, size, pull = 6.5, 6.5, 0.22
+        line_h, pull = 6.2, 0.22
     else:
-        line_h, size, pull = 5.5, 5.5, 0.18
-    return line_h * scale, size * scale, pull
+        line_h, pull = 5.4, 0.18
+    return line_h * scale, _UNIFORM_SIZE * scale, pull
+
+
+def _approx_text_width_em(s: str) -> float:
+    """Rough visual width of `s`, in units of its own font-size ("em"),
+    used only to lay out the two-column (code, degree/minute) planet-text
+    blocks below — real glyph metrics aren't available on the Python side
+    for an SVG that's rendered by the browser's own font (see
+    reports/pdf_report.py for the PDF path, which *can* measure exact
+    widths via reportlab). Myanmar glyphs run wider than Latin/digits;
+    the invisible emoji variation selector (used after the retrograde
+    "®️" mark) has zero visual width and must not be counted."""
+    total = 0.0
+    for ch in s:
+        if ch == "️":
+            continue
+        elif "က" <= ch <= "႟":
+            total += 0.95
+        elif ch == " ":
+            total += 0.3
+        elif ch in "°'\"":
+            total += 0.5
+        else:
+            total += 0.62
+    return total
 
 
 def center_box(box: float = 300.0):
@@ -200,15 +230,23 @@ def render_diamond_svg(house_content: Dict[int, dict], center_label: str = "",
         parts.append(f'<text x="{cx + cw/2:.1f}" y="{cy + ch/2 + 4:.1f}" text-anchor="middle" '
                       f'font-size="13" font-weight="700" fill="#4f33cc">{_esc(center_label)}</text>')
 
-    # planets (and the lagna marker among them) — centered, and all styled
-    # identically (same size/color) regardless of position in the list, so
-    # a multi-planet house doesn't have one line standing out from the
-    # rest. Each line is (bold_code, regular_rest): the code drawn bold,
-    # the degree/minute/retrograde-mark that follows it drawn at normal
-    # weight, as two <tspan>s sharing one centered <text> so the pair
-    # still centers as a single unit. No rashi name or house/grid number
-    # is drawn in the house any more — see house_content's own "rashi"
-    # field if that's ever needed again.
+    # planets (and the lagna marker among them) — all styled identically
+    # (same size/color) regardless of position in the list, so a
+    # multi-planet house doesn't have one line standing out from the rest.
+    # Each line is (bold_code, regular_rest): the code drawn bold in its
+    # own left-aligned column, the degree/minute/retrograde-mark that
+    # follows it drawn at normal weight starting from a second, fixed
+    # column — like a tiny 2-column table — instead of each line being
+    # independently centered as one string (which, once codes differ in
+    # width, e.g. "လဂ်" vs "၁", left the degree text "clumped" at
+    # different x per line rather than reading as a clean list). The
+    # block's column widths are sized per-house from its own longest code
+    # (see _approx_text_width_em); its horizontal position leans the same
+    # way house_label_anchor's `pull` already does — toward the triangle's
+    # open side, away from the shared diagonal (house_lean) — or, for the
+    # 4 plain Kendra houses (no diagonal to avoid), is simply centered. No
+    # rashi name or house/grid number is drawn in the house any more —
+    # see house_content's own "rashi" field if that's ever needed again.
     for h in range(1, 13):
         entry = house_content.get(h) or {}
         planets = entry.get("planets", [])
@@ -219,12 +257,33 @@ def render_diamond_svg(house_content: Dict[int, dict], center_label: str = "",
         anchor_x, anchor_y = house_label_anchor(h, box, pull=pull)
         start_y = anchor_y - (n - 1) * line_h / 2.0
         start_y = max(pad, min(start_y, box - pad - max(n - 1, 0) * line_h))
+
+        # Two left-aligned columns (code, then degree/minute) within a
+        # block that's still *centered* on the pull-biased anchor — same
+        # horizontal footprint as the single centered string this
+        # replaces, just laid out as a mini 2-column table internally.
+        # (An earlier version of this instead grew the whole block in one
+        # direction from the anchor — start-aligned toward the triangle's
+        # open vertex — but that roughly doubles the anchor's old
+        # single-line reach, and for a crowded house the anchor already
+        # sits close to that vertex, which for a corner triangle is
+        # always exactly on an internal grid line: the block then
+        # overshot past it into the neighboring cell.)
+        gap_em = 0.4
+        code_col_em = max((_approx_text_width_em(code) for code, _ in planets), default=0.0) + gap_em
+        code_col_w = size * code_col_em
+        rest_w = max((size * _approx_text_width_em(rest) for _, rest in planets), default=0.0)
+        block_w = code_col_w + rest_w
+        x0 = anchor_x - block_w / 2.0
+        x0 = max(pad, min(x0, box - pad - block_w))
+
         for i, (code, rest) in enumerate(planets):
             y = start_y + i * line_h
-            rest_span = f'<tspan font-weight="400">{_esc(rest)}</tspan>' if rest else ""
-            parts.append(f'<text x="{anchor_x:.1f}" y="{y:.1f}" text-anchor="middle" '
-                          f'font-size="{size:.1f}" fill="#1f2430">'
-                          f'<tspan font-weight="700">{_esc(code)}</tspan>{rest_span}</text>')
+            rest_tspan = (f'<tspan x="{x0 + code_col_w:.1f}" font-weight="400">{_esc(rest)}</tspan>'
+                          if rest else "")
+            parts.append(f'<text y="{y:.1f}" font-size="{size:.1f}" fill="#1f2430">'
+                          f'<tspan x="{x0:.1f}" font-weight="700">{_esc(code)}</tspan>'
+                          f'{rest_tspan}</text>')
 
     parts.append("</svg>")
     return "".join(parts)

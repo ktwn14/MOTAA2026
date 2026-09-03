@@ -5,12 +5,12 @@
   <div>
     <h1>{{ chart.input.name }} ၏ ဇာတာ</h1>
     <p class="muted">
-      {{ chart.local_dt.strftime('%Y-%m-%d %H:%M:%S') }} ({{ "%.2f"|format(chart.input.tz_offset_hours) }} UTC)
+      {{ chart.local_dt.strftime('%Y-%m-%d') }} ({{ chart.local_dt.strftime('%a') }}) {{ chart.local_dt.strftime('%H:%M:%S') }} ({{ "%.2f"|format(chart.input.tz_offset_hours) }} UTC)
       {%- if chart.input.location_name %} · {{ chart.input.location_name }}{% endif %} ·
       Lat {{ dms(chart.input.latitude, 'N', 'S') }}, Lon {{ dms(chart.input.longitude, 'E', 'W') }} ·
       Ayanamsa: {{ chart.input.ayanamsa|capitalize }} ({{ dms_sym(chart.ayanamsa_value) }})
     </p>
-    <p class="lagna-line">လဂ် — <strong>{{ chart.lagna_rashi_mm }}</strong> {{ "%.4f"|format(chart.lagna_lon % 30) }}° ·
+    <p class="muted">လဂ် — <strong>{{ chart.lagna_rashi_mm }}</strong> ({{ dms_sym(chart.lagna_lon % 30) }}) ·
       ဘာဝစနစ်: {{ house_system_label(chart.input.house_system) }}</p>
   </div>
   <div class="actions">
@@ -94,7 +94,9 @@
   {% if chart.dasha_now.maha %}
   <p class="now-running">လက်ရှိ ဒသာ — <strong>{{ GRAHA_MM[chart.dasha_now.maha.lord] }} မဟာဒသာ</strong>
     / <strong>{{ GRAHA_MM[chart.dasha_now.antar.lord] }} အန္တရ</strong>
-    ({{ chart.dasha_now.antar.start.strftime('%Y-%m-%d') }} – {{ chart.dasha_now.antar.end.strftime('%Y-%m-%d') }})</p>
+    {%- if chart.dasha_now.pratyantar %} / <strong>{{ GRAHA_MM[chart.dasha_now.pratyantar.lord] }} ပတျန္တရ</strong>
+    ({{ chart.dasha_now.pratyantar.start.strftime('%Y-%m-%d') }} – {{ chart.dasha_now.pratyantar.end.strftime('%Y-%m-%d') }}){% else %}
+    ({{ chart.dasha_now.antar.start.strftime('%Y-%m-%d') }} – {{ chart.dasha_now.antar.end.strftime('%Y-%m-%d') }}){% endif %}</p>
   {% endif %}
   <div class="table-wrap">
   <table>
@@ -110,8 +112,23 @@
           <details>
             <summary>ကြည့်ရန်</summary>
             <table class="sub-table">
+              <thead><tr><th>အန္တရ</th><th>အစ</th><th>အဆုံး</th><th>ပတျန္တရများ</th></tr></thead>
               {% for ad in md.antardashas %}
-              <tr><td>{{ GRAHA_MM[ad.lord] }}</td><td>{{ ad.start.strftime('%Y-%m-%d') }}</td><td>{{ ad.end.strftime('%Y-%m-%d') }}</td></tr>
+              <tr>
+                <td>{{ GRAHA_MM[ad.lord] }}</td>
+                <td>{{ ad.start.strftime('%Y-%m-%d') }}</td>
+                <td>{{ ad.end.strftime('%Y-%m-%d') }}</td>
+                <td>
+                  <details>
+                    <summary>ကြည့်ရန်</summary>
+                    <table class="sub-table">
+                      {% for pd in ad.pratyantardashas %}
+                      <tr><td>{{ GRAHA_MM[pd.lord] }}</td><td>{{ pd.start.strftime('%Y-%m-%d') }}</td><td>{{ pd.end.strftime('%Y-%m-%d') }}</td></tr>
+                      {% endfor %}
+                    </table>
+                  </details>
+                </td>
+              </tr>
               {% endfor %}
             </table>
           </details>
