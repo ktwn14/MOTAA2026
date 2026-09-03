@@ -93,21 +93,20 @@ RETROGRADE_MARK = "®️"
 
 def _format_entry(code: str, lon: float, retro: bool, with_degree: bool):
     """Returns (bold_part, regular_part): bold_part is just the graha/
-    lagna code (e.g. "၄", "လဂ်"); regular_part is everything else —
-    degree/minute (Rashi chart only — that's the only chart with room,
-    and reason, to show exactly where in the sign a planet sits, not
-    just which sign) plus the retrograde mark, shown everywhere a planet
-    can actually be retrograde. Callers render the two parts at different
-    font weights, in two separate columns with their own fixed gap (see
-    chart_svg.render_diamond_svg) — so regular_part itself carries no
-    leading space of its own (that would just double up with the column
-    gap); a space is only used *between* degree/minute and the
-    retrograde mark, when both are present, since those are two distinct
-    pieces of information."""
-    bits = []
-    if with_degree:
-        amsa, lipta = motaa.amsa_lipta(lon)
-        bits.append(f"{amsa}°{lipta}'")
+    lagna code (e.g. "၄", "လဂ်"); regular_part is the degree/minute plus
+    retrograde mark — both Rashi-chart-only (`with_degree`), since that's
+    the only chart with room, and reason, to show exactly where in the
+    sign a planet sits and whether it's retrograde there; the Bhava and
+    Navamsa charts show bare codes only. Callers render the two parts at
+    different font weights, in two separate columns with their own fixed
+    gap (see chart_svg.render_diamond_svg) — so regular_part itself
+    carries no leading space of its own (that would just double up with
+    the column gap); a space is only used *between* degree/minute and the
+    retrograde mark, since those are two distinct pieces of information."""
+    if not with_degree:
+        return code, ""
+    amsa, lipta = motaa.amsa_lipta(lon)
+    bits = [f"{amsa}°{lipta}'"]
     if retro:
         bits.append(RETROGRADE_MARK)
     return code, " ".join(bits)

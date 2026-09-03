@@ -139,25 +139,35 @@ def text_layout_for_lines(n: int, box: float = 300.0) -> Tuple[float, float, flo
     for every house regardless of its own planet count — sized so that
     even the crowded (5-planet-or-more) case stays legible; a 1-planet
     house's text isn't drawn bigger than a crowded neighbor's, so the
-    chart doesn't read as visually inconsistent from house to house. What
-    still varies with `n` is line-height (tighter stacking for more
-    lines, so they fit the triangle vertically) and anchor `pull` (a
-    crowded house leans harder toward its triangle's outer vertex, so the
-    block both shrinks its line spacing and leans away from the shared
-    diagonal instead of overrunning it or bleeding into the neighboring
-    house's own text)."""
+    chart doesn't read as visually inconsistent from house to house.
+
+    Line-height is derived from the CODE's size (size * _CODE_SIZE_FACTOR
+    — the taller of the two texts on a line, see render_diamond_svg), not
+    the smaller degree/minute `size` returned here — line-height smaller
+    than the tallest glyph on the line is what made one line's bold code
+    visually collide with the line above/below it once the code was
+    drawn larger than the rest of the line. `k` (>1.0, shrinking as `n`
+    grows) is how much taller than that code glyph each line-slot is —
+    still tighter for a crowded house so it stays legible without
+    overflowing the triangle vertically, but never below ~1.0 so lines
+    can no longer overlap regardless of how large the code text is drawn.
+    `pull` (also shrinking with `n`) leans a crowded house's block harder
+    toward its triangle's outer vertex, away from the shared diagonal,
+    instead of overrunning it or bleeding into the neighboring house's
+    own text."""
     scale = box / 300.0
+    code_size = _UNIFORM_SIZE * _CODE_SIZE_FACTOR
     if n <= 2:
-        line_h, pull = 9.5, 0.30
+        k, pull = 1.4, 0.30
     elif n == 3:
-        line_h, pull = 8.0, 0.28
+        k, pull = 1.25, 0.28
     elif n == 4:
-        line_h, pull = 7.0, 0.26
+        k, pull = 1.15, 0.26
     elif n == 5:
-        line_h, pull = 6.2, 0.22
+        k, pull = 1.08, 0.22
     else:
-        line_h, pull = 5.4, 0.18
-    return line_h * scale, _UNIFORM_SIZE * scale, pull
+        k, pull = 1.02, 0.18
+    return code_size * k * scale, _UNIFORM_SIZE * scale, pull
 
 
 def _approx_text_width_em(s: str) -> float:
