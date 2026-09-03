@@ -208,10 +208,22 @@ def text_layout_for_lines(n: int, box: float = 300.0) -> Tuple[float, float, flo
     than the tallest glyph on the line is what made one line's bold code
     visually collide with the line above/below it once the code was
     drawn larger than the rest of the line. `k` (>1.0, shrinking as `n`
-    grows) is how much taller than that code glyph each line-slot is —
-    still tighter for a crowded house so it stays legible without
-    overflowing the triangle vertically, but never below ~1.0 so lines
-    can no longer overlap regardless of how large the code text is drawn.
+    grows) is how much taller than that code glyph each line-slot is.
+    Ordinary typographic line-height (for legible, non-touching lines) is
+    ~1.2-1.5x a font's own size, so k needs to stay in roughly that range
+    regardless of `n` — an earlier version of this let k fall to ~1.0-1.1
+    for a crowded (5-6 line) house on the reasoning that house_bbox's own
+    vertical room was the binding constraint, but bbox room turned out to
+    have generous slack left over even there (verified empirically); what
+    was actually cramped, per a real screenshot, was the bold/larger code
+    column itself — a Myanmar code glyph's real visual height (ascenders,
+    stacked vowel signs) routinely exceeds its own nominal em-size, so
+    k needs its own typographic margin, not just >1.0. `k` still tapers
+    for a crowded house so a very tall block doesn't overflow the
+    triangle vertically or run out of horizontal room against the
+    diagonal it shares with its sibling (see diagonal_x0_bounds) — this
+    taper was re-checked against house_bbox's actual slack, up to an
+    (unlikely) 8-planet conjunction, when these numbers were last tuned.
     `pull` (also shrinking with `n`) leans a crowded house's block harder
     toward its triangle's outer vertex, away from the shared diagonal,
     instead of overrunning it or bleeding into the neighboring house's
@@ -221,13 +233,15 @@ def text_layout_for_lines(n: int, box: float = 300.0) -> Tuple[float, float, flo
     if n <= 2:
         k, pull = 1.4, 0.30
     elif n == 3:
-        k, pull = 1.25, 0.28
+        k, pull = 1.32, 0.28
     elif n == 4:
-        k, pull = 1.22, 0.26
+        k, pull = 1.30, 0.26
     elif n == 5:
-        k, pull = 1.16, 0.22
+        k, pull = 1.28, 0.22
+    elif n == 6:
+        k, pull = 1.26, 0.18
     else:
-        k, pull = 1.08, 0.18
+        k, pull = 1.20, 0.15
     return code_size * k * scale, _UNIFORM_SIZE * scale, pull
 
 
