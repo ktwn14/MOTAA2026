@@ -1,13 +1,27 @@
-/* Bundled the same way as reports/pdf_report.py's PDF font (see
-   static/fonts/Padauk-LICENSE.txt) — used specifically for the diamond
-   charts below (.chart-panel svg text), not the page's general
-   typography, because the chart's own text-layout math (astro/
-   chart_svg.py's _approx_text_width_em) is only tuned against this
-   font's actual glyph metrics. Left to the browser's own Myanmar font
-   fallback (e.g. macOS's "Myanmar Text"/"Myanmar MN", a different
-   design with different widths), a planet's degree/minute text could
-   land closer to — or past — the diagonal/grid line than the PDF, which
-   always uses this exact font, ever shows. */
+/* Two bundled Myanmar fonts (both SIL Open Font License — see the
+   matching -LICENSE.txt next to each .ttf in this folder), used
+   together as a fallback PAIR rather than either alone:
+   "Masterpiece Uni Round" is the preferred display face (the rounder,
+   more familiar style asked for over Padauk), but the font itself only
+   has Myanmar-script glyphs — no digits, Latin letters, or punctuation
+   at all (not even '°', straight quotes, '®', or '·', all of which this
+   app uses constantly) — so on their own every date, percentage,
+   English word, and degree/minute mark would render as tofu. Padauk
+   comes right after it in each font stack below purely as that gap-
+   filler: browsers already resolve a missing glyph against the NEXT
+   font in a font-family list automatically, per character, with no
+   extra markup needed, so this list order alone is what makes a string
+   mixing both scripts render correctly from either font.
+   Padauk is also still the one astro/chart_svg.py's own text-layout
+   math (_approx_text_width_em) is tuned against — the diamond charts'
+   own font-family below keeps it reachable for that reason even though
+   it's now second-choice for the Myanmar glyphs themselves. */
+@font-face {
+  font-family: "Masterpiece Uni Round";
+  src: url("/static/fonts/MasterpieceUniRound.ttf") format("truetype");
+  font-weight: 400 700;
+  font-style: normal;
+}
 @font-face {
   font-family: "Padauk";
   src: url("/static/fonts/Padauk-Regular.ttf") format("truetype");
@@ -31,7 +45,7 @@
   --soma: #1a7f4b;
   --papa: #b3261e;
   --border: #e3e5ea;
-  font-family: "Masterpiece Uni Round", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Myanmar Text", "Myanmar MN", "Helvetica Neue", Arial, sans-serif;
+  font-family: "Masterpiece Uni Round", "Padauk", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Myanmar Text", "Myanmar MN", "Helvetica Neue", Arial, sans-serif;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); }

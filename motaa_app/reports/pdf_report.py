@@ -9,14 +9,37 @@ relying on the *host* having one installed meant the PDF silently fell
 back to rendering Myanmar text as black boxes on any machine that
 didn't (e.g. a fresh Linux container/Codespace with no Myanmar font
 package) — this bit real users, not just a hypothetical. So this bundles
-Padauk (SIL Open Font License — see static/fonts/Padauk-LICENSE.txt),
-one directory over from this file, and tries that first; a handful of
-common system paths are kept below only as a fallback for anyone who's
-replaced it with a different font locally.
+two fonts (both SIL Open Font License — see the matching -LICENSE.txt
+next to each .ttf in static/fonts/) and uses them TOGETHER, not as
+either/or alternatives:
+
+  - Padauk (FONT_NAME/FONT_NAME_BOLD) is the full-coverage font — every
+    digit, Latin letter and punctuation mark this app uses, plus Myanmar
+    script. It's what actually renders anything Masterpiece Uni Round
+    can't.
+  - Masterpiece Uni Round (FONT_NAME_DISPLAY) is the preferred display
+    face for Myanmar TEXT specifically (the rounder, more familiar style
+    asked for over Padauk alone) — but the font itself has ONLY Myanmar-
+    script glyphs, nothing else (not even '°', straight quotes, '®', or
+    '·', all used constantly here), so on its own it would draw half of
+    every table cell as tofu.
+
+Unlike a browser's CSS font-family list, reportlab has no automatic
+per-glyph font fallback of its own — a plain string drawn in one font
+just shows .notdef boxes for whatever that font lacks. _font_runs() /
+_mixed_markup() do that fallback manually: split text into runs by
+whether FONT_NAME_DISPLAY's own cmap (_DISPLAY_FONT_RANGES) covers each
+character, and mark each run with its own font. This is applied to every
+Paragraph and table cell (see _mixed_markup, _cell_para); the diamond
+charts' own text (drawn via reportlab's lower-level Drawing/String
+shapes, not Paragraph) deliberately stays Padauk-only instead — see
+_add_column_row's docstring for why.
 """
 import io
 import os
+from xml.sax.saxutils import escape as _xml_escape
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -36,17 +59,14 @@ _APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 FONT_NAME = "Helvetica"
 FONT_NAME_BOLD = "Helvetica-Bold"
+FONT_NAME_DISPLAY = None  # set below if the bundled Masterpiece Uni Round registers
 _CANDIDATE_FONTS = [
-    # If you have "Masterpiece Uni Round" installed, point at its .ttf here
-    # (Font Book usually installs to ~/Library/Fonts or /Library/Fonts) to
-    # make the PDF match the web UI's own font:
-    os.path.expanduser("~/Library/Fonts/MasterpieceUniRound.ttf"),
-    os.path.expanduser("~/Library/Fonts/Masterpiece Uni Round.ttf"),
-    "/Library/Fonts/MasterpieceUniRound.ttf",
-    "/Library/Fonts/Masterpiece Uni Round.ttf",
     # Bundled with this project — works out of the box on any machine,
     # regardless of what (if anything) is installed system-wide, so this
-    # is the effective default whenever the font above isn't present.
+    # is the effective default. This is the FULL-COVERAGE font (Myanmar
+    # script plus every digit, Latin letter and symbol this app uses) —
+    # see FONT_NAME_DISPLAY below for the separate, nicer-looking but
+    # Myanmar-only display font layered on top of it.
     os.path.join(_APP_DIR, "static", "fonts", "Padauk-Regular.ttf"),
     "/System/Library/Fonts/Supplemental/Myanmar MN.ttf",     # macOS fallback
     "/System/Library/Fonts/Myanmar.ttc",                      # older macOS
@@ -54,16 +74,42 @@ _CANDIDATE_FONTS = [
     "/usr/share/fonts/truetype/padauk/Padauk.ttf",            # Linux (Padauk)
 ]
 _CANDIDATE_FONTS_BOLD = [
-    os.path.expanduser("~/Library/Fonts/MasterpieceUniRound-Bold.ttf"),
-    "/Library/Fonts/MasterpieceUniRound-Bold.ttf",
     os.path.join(_APP_DIR, "static", "fonts", "Padauk-Bold.ttf"),
     "/usr/share/fonts/truetype/noto/NotoSansMyanmar-Bold.ttf",
     "/usr/share/fonts/truetype/padauk/Padauk-Bold.ttf",
 ]
+_DISPLAY_FONT_PATH = os.path.join(_APP_DIR, "static", "fonts", "MasterpieceUniRound.ttf")
+
+# Which codepoints the bundled Masterpiece Uni Round display font actually
+# has glyphs for (from its own cmap — see static/fonts/
+# MasterpieceUniRound-LICENSE.txt for provenance): Myanmar script only —
+# no Latin letters, digits, or most punctuation at all, not even '°',
+# straight quotes, '®', or '·', all used constantly throughout this app.
+# Anything outside these ranges must fall back to FONT_NAME/FONT_NAME_BOLD
+# (Padauk) instead — see _font_runs()/_mixed_markup(). U+1039 (virama —
+# what stacks a conjunct consonant under the one before it, e.g. in
+# "အင်္ဂါ"/Mars or "ဗုဒ္ဓဟူး"/Mercury) is deliberately carved out of its
+# own (0x1036-0x104F) range even though MUR does have a glyph for it:
+# without real shaping, that glyph draws in ISOLATION rather than
+# properly stacking — and MUR's isolated form is a large, prominent
+# dotted circle, while Padauk's (used here instead) is a small, mostly
+# unobtrusive mark, matching what every earlier round of this session
+# already verified as an acceptable (if imperfect) rendering for this
+# exact "kinzi" limitation.
+_DISPLAY_FONT_RANGES = [
+    (0x0020, 0x0020), (0x1000, 0x1021), (0x1023, 0x1027), (0x1029, 0x1032),
+    (0x1036, 0x1038), (0x103B, 0x104F), (0x200B, 0x200D), (0x2013, 0x2013), (0x23CC, 0x23CC),
+    (0x25CC, 0x25CC),
+]
+
+
+def _display_font_covers(ch: str) -> bool:
+    cp = ord(ch)
+    return any(lo <= cp <= hi for lo, hi in _DISPLAY_FONT_RANGES)
 
 
 def _register_myanmar_font():
-    global FONT_NAME, FONT_NAME_BOLD
+    global FONT_NAME, FONT_NAME_BOLD, FONT_NAME_DISPLAY
     for path in _CANDIDATE_FONTS:
         if os.path.exists(path):
             try:
@@ -83,13 +129,21 @@ def _register_myanmar_font():
             try:
                 pdfmetrics.registerFont(TTFont("MyanmarFont-Bold", path))
                 FONT_NAME_BOLD = "MyanmarFont-Bold"
-                return
+                break
             except Exception:
                 continue
-    # No true bold face found for whichever font matched above — reuse the
-    # regular one rather than silently falling back to Helvetica-Bold
-    # (which would render Myanmar text as boxes again).
-    FONT_NAME_BOLD = FONT_NAME
+    else:
+        # No true bold face found for whichever font matched above — reuse
+        # the regular one rather than silently falling back to
+        # Helvetica-Bold (which would render Myanmar text as boxes again).
+        FONT_NAME_BOLD = FONT_NAME
+
+    if os.path.exists(_DISPLAY_FONT_PATH):
+        try:
+            pdfmetrics.registerFont(TTFont("MasterpieceUniRound", _DISPLAY_FONT_PATH))
+            FONT_NAME_DISPLAY = "MasterpieceUniRound"
+        except Exception:
+            pass
 
 
 _register_myanmar_font()
@@ -193,14 +247,86 @@ def _reorder_myanmar(text: str) -> str:
     return "".join(out)
 
 
+def _font_runs(text: str, default_font: str):
+    """Split `text` into (font_name, substring) runs: FONT_NAME_DISPLAY
+    (Masterpiece Uni Round) for characters it actually covers, else
+    `default_font`. When the caller asked for bold (default_font is
+    FONT_NAME_BOLD), the display font is skipped entirely and every
+    character goes through `default_font` instead — Masterpiece Uni
+    Round has no bold face of its own, and silently keeping it at
+    regular weight would defeat the point of asking for bold (the lagna
+    rashi name, a dasha lord's name, …), so those short bold values fall
+    back to Padauk-Bold instead of losing their emphasis."""
+    if not FONT_NAME_DISPLAY or not text or default_font == FONT_NAME_BOLD:
+        return [(default_font, text)] if text else []
+    runs = []
+    cur_font, cur_chars = None, []
+    for ch in text:
+        want = FONT_NAME_DISPLAY if _display_font_covers(ch) else default_font
+        if want != cur_font:
+            if cur_chars:
+                runs.append((cur_font, "".join(cur_chars)))
+            cur_font, cur_chars = want, [ch]
+        else:
+            cur_chars.append(ch)
+    if cur_chars:
+        runs.append((cur_font, "".join(cur_chars)))
+    return runs
+
+
+def _mixed_markup(text: str, default_font: str) -> str:
+    """Reportlab Paragraph markup for one plain-text VALUE (never a
+    string that already has markup of its own baked in — see below):
+    _reorder_myanmar()'d for correct vowel position, XML-escaped (this
+    wraps free-typed values too, e.g. binput.name/location_name, not
+    just this app's own fixed Myanmar vocabulary), with each run (see
+    _font_runs) wrapped in its own <font face="..."> tag so a Paragraph
+    using `default_font` as its base style renders Myanmar script in the
+    nicer Masterpiece Uni Round face wherever that font actually has the
+    glyph, and everything else (digits, Latin, punctuation, and any
+    Myanmar character it doesn't have) in `default_font` (Padauk),
+    unaffected.
+
+    Callers that build their OWN markup around an interpolated value
+    (<b>, &nbsp;, …) must apply this to each VALUE individually, before
+    composing the final string with that literal markup — never to an
+    already-markup-bearing string as a whole, which would both
+    double-escape the existing tags and risk mis-wrapping a tag
+    delimiter that happens to sit next to a Myanmar run."""
+    text = _reorder_myanmar(text)
+    return "".join(f'<font face="{font}">{_xml_escape(chunk)}</font>'
+                    for font, chunk in _font_runs(text, default_font))
+
+
 def _P(text: str, style) -> Paragraph:
-    """Paragraph(), with _reorder_myanmar applied first."""
-    return Paragraph(_reorder_myanmar(text), style)
+    """Paragraph() for a plain string with no markup of its own —
+    _mixed_markup applied against the style's own base font."""
+    return Paragraph(_mixed_markup(text, style.fontName), style)
 
 
-def _reorder_rows(rows):
-    """Apply _reorder_myanmar to every cell of a Table's 2D row list."""
-    return [[_reorder_myanmar(str(cell)) for cell in row] for row in rows]
+def _cell_para(text, font_size: float, color=None) -> Paragraph:
+    """One Table cell's content as a Paragraph (needed so _mixed_markup's
+    <font> tags are actually interpreted rather than shown as literal
+    text — a plain-string cell doesn't parse markup at all) — centered
+    via its own ParagraphStyle, since Table's ALIGN style command has no
+    effect on a Paragraph cell's internal text alignment; likewise
+    `color` (used for the header row) since TableStyle's TEXTCOLOR
+    command doesn't reach inside a Paragraph either."""
+    style = ParagraphStyle("cell", fontName=FONT_NAME, fontSize=font_size,
+                            leading=font_size * 1.25, alignment=TA_CENTER,
+                            textColor=color or colors.black)
+    return Paragraph(_mixed_markup(str(text), FONT_NAME), style)
+
+
+def _mixed_rows(rows, font_size: float):
+    """Convert a Table's 2D row list (plain strings) into _cell_para
+    Paragraph cells, row 0 (the header) styled in the same purple
+    TableStyle's own TEXTCOLOR command would have used on a plain-string
+    cell — see _cell_para for why that command alone isn't enough once
+    cells are Paragraphs."""
+    header_color = colors.HexColor("#4f33cc")
+    return [[_cell_para(cell, font_size, color=(header_color if r == 0 else None))
+             for cell in row] for r, row in enumerate(rows)]
 
 
 def _add_column_row(d, x0, y, code, rest, code_col_w, code_size, size, color):
@@ -212,7 +338,14 @@ def _add_column_row(d, x0, y, code, rest, code_col_w, code_size, size, color):
     re-centered (see the matching comment in
     chart_svg.render_diamond_svg). reportlab's graphics String has no
     rich-text/run concept, so this just places two separate String
-    shapes."""
+    shapes. Deliberately Padauk-only (FONT_NAME/FONT_NAME_BOLD), not
+    Masterpiece-Uni-Round-aware like _mixed_markup: this text's exact
+    on-page position is measured via pdfmetrics.stringWidth against
+    whichever font actually draws it (see _diamond_drawing) as part of
+    keeping a crowded house's text off the diagonal/grid line it sits
+    against — swapping fonts mid-computation for just some characters
+    would reopen exactly that risk for no real benefit at this font
+    size (6-9pt, where the two fonts' style difference barely reads)."""
     d.add(String(x0, y, code, fontName=FONT_NAME_BOLD, fontSize=code_size,
                   fillColor=color, textAnchor="start"))
     if rest:
@@ -313,16 +446,21 @@ def generate_pdf(chart, diamonds=None) -> io.BytesIO:
 
     binput = chart["input"]
     story.append(_P(f"MOTAA စနစ် ဇာတာ — {binput.name}", h1))
-    location_bit = f"{binput.location_name} &nbsp;·&nbsp; " if binput.location_name else ""
+    location_bit = (f"{_mixed_markup(binput.location_name, FONT_NAME)} &nbsp;·&nbsp; "
+                     if binput.location_name else "")
     meta = (f"{chart['local_dt'].strftime('%Y-%m-%d')} ({chart['local_dt'].strftime('%a')}) "
             f"{chart['local_dt'].strftime('%H:%M:%S')} "
             f"(UTC{'+' if binput.tz_offset_hours >= 0 else ''}{binput.tz_offset_hours}) &nbsp;·&nbsp; "
             f"{location_bit}"
             f"Lat {_dms(binput.latitude, 'N', 'S')}, Lon {_dms(binput.longitude, 'E', 'W')} &nbsp;·&nbsp; "
             f"Ayanamsa: {binput.ayanamsa} ({_dms_sym(chart['ayanamsa_value'])})")
-    story.append(_P(meta, muted))
-    story.append(_P(f"လဂ် — <b>{chart['lagna_rashi_mm']}</b> ({_dms_sym(chart['lagna_lon'] % 30)}) &nbsp;·&nbsp; "
-                     f"House system: {HOUSE_SYSTEM_LABEL_MAP.get(binput.house_system, binput.house_system)}", muted))
+    story.append(Paragraph(meta, muted))
+    lagna_prefix = _mixed_markup("လဂ် — ", FONT_NAME)
+    lagna_bold = _mixed_markup(chart['lagna_rashi_mm'], FONT_NAME_BOLD)
+    house_sys_label = _mixed_markup(
+        HOUSE_SYSTEM_LABEL_MAP.get(binput.house_system, binput.house_system), FONT_NAME)
+    story.append(Paragraph(f"{lagna_prefix}{lagna_bold} ({_dms_sym(chart['lagna_lon'] % 30)}) &nbsp;·&nbsp; "
+                            f"House system: {house_sys_label}", muted))
     story.append(Spacer(1, 10))
 
     if diamonds:
@@ -349,7 +487,7 @@ def generate_pdf(chart, diamonds=None) -> io.BytesIO:
             GRAHA_MM[row.nakshatra_lord], row.friend_enemy, GRAHA_MM[row.bhava_lord],
             GRAHA_MM[row.navamsa_lord], row.navamsa_friend_enemy,
         ])
-    tn = Table(_reorder_rows(nak_rows), repeatRows=1)
+    tn = Table(_mixed_rows(nak_rows, 7), repeatRows=1)
     tn.setStyle(_table_style(small=True))
     story.append(tn)
     story.append(Spacer(1, 14))
@@ -366,7 +504,7 @@ def generate_pdf(chart, diamonds=None) -> io.BytesIO:
             _pct(gp.step1), _pct(gp.step2), _pct(gp.step3), _pct(gp.step4), _pct(gp.step5), _pct(gp.step6),
             _pct(gp.final),
         ])
-    t = Table(_reorder_rows(rows), repeatRows=1)
+    t = Table(_mixed_rows(rows, 8), repeatRows=1)
     t.setStyle(_table_style())
     story.append(t)
     story.append(Spacer(1, 14))
@@ -382,7 +520,7 @@ def generate_pdf(chart, diamonds=None) -> io.BytesIO:
             _pct(row.own_strength), _pct(row.positive_influence), _pct(row.negative_influence),
             _pct(row.net_influence),
         ])
-    t2 = Table(_reorder_rows(rows2), repeatRows=1)
+    t2 = Table(_mixed_rows(rows2, 8), repeatRows=1)
     t2.setStyle(_table_style())
     story.append(t2)
     story.append(PageBreak())
@@ -390,15 +528,17 @@ def generate_pdf(chart, diamonds=None) -> io.BytesIO:
     # --- Dasha ---
     story.append(_P("ဝိသောတ္တရီ ဒသာ (Vimshottari Dasha)", h2))
     db = chart["dasha_balance"]
-    story.append(_P(f"စောင့်ရင်းဒသာ — <b>{GRAHA_MM[db['lord']]} ဒသာ</b> "
-                     f"({db['years']} နှစ် {db['months']} လ {db['days']} ရက်)", body))
+    balance_prefix = _mixed_markup("စောင့်ရင်းဒသာ — ", FONT_NAME)
+    balance_bold = _mixed_markup(f"{GRAHA_MM[db['lord']]} ဒသာ", FONT_NAME_BOLD)
+    balance_suffix = _mixed_markup(f" ({db['years']} နှစ် {db['months']} လ {db['days']} ရက်)", FONT_NAME)
+    story.append(Paragraph(f"{balance_prefix}{balance_bold}{balance_suffix}", body))
     story.append(Spacer(1, 8))
     header3 = ["မဟာဒသာ", "အစ", "အဆုံး", "နှစ်ပေါင်း"]
     rows3 = [header3]
     for md in chart["dasha_sequence"]:
         rows3.append([GRAHA_MM[md.lord], md.start.strftime("%Y-%m-%d"),
                       md.end.strftime("%Y-%m-%d"), f"{md.years:.2f}"])
-    t3 = Table(_reorder_rows(rows3), repeatRows=1)
+    t3 = Table(_mixed_rows(rows3, 8), repeatRows=1)
     t3.setStyle(_table_style())
     story.append(t3)
     story.append(Spacer(1, 12))
@@ -408,7 +548,7 @@ def generate_pdf(chart, diamonds=None) -> io.BytesIO:
         arows = [["အန္တရ", "အစ", "အဆုံး"]]
         for ad in md.antardashas:
             arows.append([GRAHA_MM[ad.lord], ad.start.strftime("%Y-%m-%d"), ad.end.strftime("%Y-%m-%d")])
-        ta = Table(_reorder_rows(arows), repeatRows=1)
+        ta = Table(_mixed_rows(arows, 7), repeatRows=1)
         ta.setStyle(_table_style(small=True))
         story.append(ta)
         story.append(Spacer(1, 8))
