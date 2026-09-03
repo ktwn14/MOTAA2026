@@ -223,11 +223,11 @@ def text_layout_for_lines(n: int, box: float = 300.0) -> Tuple[float, float, flo
     elif n == 3:
         k, pull = 1.25, 0.28
     elif n == 4:
-        k, pull = 1.15, 0.26
+        k, pull = 1.22, 0.26
     elif n == 5:
-        k, pull = 1.08, 0.22
+        k, pull = 1.16, 0.22
     else:
-        k, pull = 1.02, 0.18
+        k, pull = 1.08, 0.18
     return code_size * k * scale, _UNIFORM_SIZE * scale, pull
 
 
