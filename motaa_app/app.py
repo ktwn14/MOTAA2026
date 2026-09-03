@@ -101,6 +101,7 @@ def _chart_to_session_input(form) -> BirthInput:
         node_mode=form.get("node_mode", "mean"),
         house_system=hsys,
         location_name=form.get("location_name", "").strip(),
+        include_outer=bool(form.get("include_outer")),
     )
 
 
@@ -139,7 +140,7 @@ def calculate():
         "tz_offset_hours": binput.tz_offset_hours, "latitude": binput.latitude,
         "longitude": binput.longitude, "ayanamsa": binput.ayanamsa,
         "node_mode": binput.node_mode, "house_system": binput.house_system,
-        "location_name": binput.location_name,
+        "location_name": binput.location_name, "include_outer": binput.include_outer,
     }
 
     # group grahas by house, for the diamond-chart grid display

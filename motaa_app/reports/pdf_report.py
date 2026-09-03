@@ -293,7 +293,11 @@ def generate_pdf(chart, diamonds=None) -> io.BytesIO:
     story.append(PageBreak())
 
     # --- Dasha ---
-    story.append(Paragraph("ဝိသောတရီ ဒသာ (Vimshottari Dasha)", h2))
+    story.append(Paragraph("ဝိသောတ္တရီ ဒသာ (Vimshottari Dasha)", h2))
+    db = chart["dasha_balance"]
+    story.append(Paragraph(f"မွေးချိန်လက်ကျန်ဒသာ — <b>{GRAHA_MM[db['lord']]} ဒသာ</b> "
+                            f"({db['years']} နှစ် {db['months']} လ {db['days']} ရက်)", body))
+    story.append(Spacer(1, 8))
     header3 = ["မဟာဒသာ", "အစ", "အဆုံး", "နှစ်ပေါင်း"]
     rows3 = [header3]
     for md in chart["dasha_sequence"]:

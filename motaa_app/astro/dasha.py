@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Vimshottari Dasha (ဝိသောတရီ ဒသာ) calculation.
+Vimshottari Dasha (ဝိသောတ္တရီ ဒသာ) calculation.
 
 Pure math on top of the Moon's sidereal longitude at birth — no ephemeris
 calls needed here, which makes this module fully unit-testable on its own.
@@ -159,6 +159,33 @@ def _pratyantardashas(ad: AntarDasha) -> List[PratyantarDasha]:
         out.append(PratyantarDasha(lord=plord, lord_mm=GRAHA_MM[plord], start=cursor, end=end, years=praty_years))
         cursor = end
     return out
+
+
+MONTH_DAYS = YEAR_DAYS / 12.0  # average civil month length, for the y/m/d breakdown below
+
+
+def dasha_balance_at_birth(sequence: List[MahaDasha]):
+    """The "မွေးချိန်လက်ကျန်ဒသာ" (birth-time balance dasha) — the
+    remaining portion, as of birth itself, of the Mahadasha whose lord is
+    the birth nakshatra's ruler. compute_vimshottari() already computes
+    this correctly as sequence[0] (a partial Mahadasha, its `years`
+    already the balance_fraction-scaled remainder) — this just re-expresses
+    that same duration as whole (years, months, days) components, since
+    that's the conventional way a Vimshottari balance dasha is stated,
+    rather than as a raw fractional-year float."""
+    md = sequence[0]
+    y = int(md.years)
+    months_f = (md.years - y) * 12.0
+    m = int(months_f)
+    d = round((months_f - m) * MONTH_DAYS)
+    if d >= 30:
+        d -= 30
+        m += 1
+    if m >= 12:
+        m -= 12
+        y += 1
+    return {"lord": md.lord, "lord_mm": md.lord_mm, "years": y, "months": m, "days": d,
+            "end": md.end}
 
 
 def dasha_running_at(sequence: List[MahaDasha], when: datetime):

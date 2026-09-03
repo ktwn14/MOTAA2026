@@ -130,7 +130,7 @@ _UNIFORM_SIZE = 6.5  # at box=300 — see text_layout_for_lines() docstring
 # factor, so the code stays the more prominent, at-a-glance part of each
 # line without the whole line growing (which would risk the vertical-fit
 # and diagonal-collision tuning text_layout_for_lines already has).
-_CODE_SIZE_FACTOR = 1.2
+_CODE_SIZE_FACTOR = 1.35
 
 
 def text_layout_for_lines(n: int, box: float = 300.0) -> Tuple[float, float, float]:

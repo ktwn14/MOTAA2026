@@ -85,6 +85,13 @@
     </div>
 
     <div class="field">
+      <label style="flex-direction:row; align-items:center; gap:8px; display:flex;">
+        <input type="checkbox" name="include_outer" {{ 'checked' if L.get('include_outer', True) }}>
+        Outer Planets (Uranus / Neptune / Pluto) ပါ ထည့်တွက်မည်
+      </label>
+    </div>
+
+    <div class="field">
       <label>ဘာဝ စံနစ် (House System)</label>
       <select name="house_system">
         {% for key, label in house_systems %}

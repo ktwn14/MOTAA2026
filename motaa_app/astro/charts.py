@@ -30,6 +30,7 @@ class BirthInput:
     node_mode: str = "mean"          # "mean" or "true"
     house_system: str = "vequal"
     location_name: str = ""          # free-text birthplace name, display only
+    include_outer: bool = True       # show Uranus/Neptune/Pluto reference points
 
 
 def build_chart(binput: BirthInput):
@@ -43,13 +44,17 @@ def build_chart(binput: BirthInput):
     grahas = eph["grahas"]
     lagna_lon = eph["lagna"]
     cusps = eph["cusps"]
-    outer_grahas, outer_retrograde = ephemeris.outer_planet_data(eph["jd_ut"])
+    if binput.include_outer:
+        outer_grahas, outer_retrograde = ephemeris.outer_planet_data(eph["jd_ut"])
+    else:
+        outer_grahas, outer_retrograde = {}, {}
     retrograde = {**eph["retrograde"], **outer_retrograde}
 
     positions, bhavas, rashi_matrix, house_matrix = motaa.compute_all(grahas, lagna_lon, cusps)
 
     seq = dasha.compute_vimshottari(grahas["Moon"], local_dt, span_years=120)
     md, ad, pd = dasha.dasha_running_at(seq, datetime.now())
+    dasha_balance = dasha.dasha_balance_at_birth(seq)
 
     lagna_rashi_idx = motaa.rashi_index(lagna_lon)
 
@@ -73,6 +78,7 @@ def build_chart(binput: BirthInput):
         "bhavas": bhavas,
         "dasha_sequence": seq,
         "dasha_now": {"maha": md, "antar": ad, "pratyantar": pd},
+        "dasha_balance": dasha_balance,
         "navamsa_lagna_idx": navamsa_lagna_idx,
         "navamsa_grahas": navamsa_grahas,
     }
@@ -129,7 +135,10 @@ def build_diamond_chart_data(chart: dict):
     numeral code (GRAHA_SHORT), not the full GRAHA_MM name, to leave room
     in these small cells; the outer planets (Uranus/Neptune/Pluto) are
     added as plain reference points (short code "U"/"N"/"P" only — no
-    MOTAA strength/dasha math applies to them)."""
+    MOTAA strength/dasha math applies to them), when
+    chart["outer_grahas"] is non-empty — build_chart() leaves it an
+    empty dict when binput.include_outer is False, so all three loops
+    below simply add nothing for them."""
     positions = chart["positions"]
     bhavas = chart["bhavas"]
     cusps = chart["cusps"]
@@ -151,9 +160,10 @@ def build_diamond_chart_data(chart: dict):
     for name in GRAHA9:
         gp = positions[name]
         rashi_buckets[gp.rashi_idx].append((gp.lon, GRAHA_SHORT[name], name))
-    for name in OUTER_PLANETS:
-        lon = outer_grahas[name]
-        rashi_buckets[motaa.rashi_index(lon)].append((lon, OUTER_PLANET_SHORT[name], name))
+    if outer_grahas:
+        for name in OUTER_PLANETS:
+            lon = outer_grahas[name]
+            rashi_buckets[motaa.rashi_index(lon)].append((lon, OUTER_PLANET_SHORT[name], name))
     _fill_sorted(rashi_content, rashi_buckets, retrograde, with_degree=True)
     rashi_content[lagna_rashi_idx]["planets"].insert(
         0, _format_entry(LAGNA_SHORT, lagna_lon, False, with_degree=True))
@@ -173,11 +183,12 @@ def build_diamond_chart_data(chart: dict):
         gp = positions[name]
         grid_pos = bhavas[gp.house - 1].rashi_idx
         bhava_buckets[grid_pos].append((gp.lon, GRAHA_SHORT[name], name))
-    for name in OUTER_PLANETS:
-        lon = outer_grahas[name]
-        house = motaa.bhava_of(lon, cusps)
-        grid_pos = bhavas[house - 1].rashi_idx
-        bhava_buckets[grid_pos].append((lon, OUTER_PLANET_SHORT[name], name))
+    if outer_grahas:
+        for name in OUTER_PLANETS:
+            lon = outer_grahas[name]
+            house = motaa.bhava_of(lon, cusps)
+            grid_pos = bhavas[house - 1].rashi_idx
+            bhava_buckets[grid_pos].append((lon, OUTER_PLANET_SHORT[name], name))
     _fill_sorted(bhava_content, bhava_buckets, retrograde, with_degree=False)
     bhava_content[lagna_rashi_idx]["planets"].insert(0, (LAGNA_SHORT, ""))
     bhava_content[lagna_rashi_idx]["lagna"] = True
@@ -193,10 +204,11 @@ def build_diamond_chart_data(chart: dict):
         lon = chart["grahas"][name]
         nav_idx = chart["navamsa_grahas"][name]
         nav_buckets[nav_idx].append((lon, GRAHA_SHORT[name], name))
-    for name in OUTER_PLANETS:
-        lon = outer_grahas[name]
-        nav_idx = motaa.navamsa_rashi_index(lon)
-        nav_buckets[nav_idx].append((lon, OUTER_PLANET_SHORT[name], name))
+    if outer_grahas:
+        for name in OUTER_PLANETS:
+            lon = outer_grahas[name]
+            nav_idx = motaa.navamsa_rashi_index(lon)
+            nav_buckets[nav_idx].append((lon, OUTER_PLANET_SHORT[name], name))
     _fill_sorted(nav_content, nav_buckets, retrograde, with_degree=False)
     nav_content[nav_lagna_idx]["planets"].insert(0, (LAGNA_SHORT, ""))
     nav_content[nav_lagna_idx]["lagna"] = True
