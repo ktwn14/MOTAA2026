@@ -139,6 +139,70 @@ def _dms_sym(value: float) -> str:
     return f"{deg}°{minute:02d}'{sec:02d}\""
 
 
+_MM_MEDIALS = "ျြွှ"   # ျြွှ — medial ya/ra/wa/ha
+_MM_E_VOWEL = "ေ"                      # ေ
+_MM_LO, _MM_HI = 0x1000, 0x109F             # Myanmar Unicode block
+
+
+def _reorder_myanmar(text: str) -> str:
+    """Move each Myanmar pre-base vowel sign 'ေ' (U+1031) to just before
+    the base consonant it modifies (skipping back over any medial
+    consonant signs — ျြွှ — sitting between that consonant and the
+    vowel). Myanmar text is stored in logical order (consonant, then any
+    medials, then this vowel), but the vowel is drawn to the LEFT of
+    that whole cluster — a font-shaping rule applied by a real text
+    shaping engine (HarfBuzz, used by browsers) but never by reportlab,
+    which only ever draws a Unicode string's characters one at a time,
+    left to right, in raw storage order. Without this, "မေထုန်" (Gemini)
+    would draw with 'ေ' stuck after the whole word instead of before its
+    first letter — exactly the "Myanmar rendering still isn't right" bug
+    reported after every other PDF fix.
+
+    This is a deliberately narrow, dependency-free fix for the single
+    most visually-breaking Myanmar shaping rule, verified against real
+    HarfBuzz shaping output for every Myanmar string this app actually
+    uses (see session notes) — not a general Myanmar text shaper. It
+    does NOT reproduce two rarer effects real shaping also applies: the
+    "kinzi" mark (a killed-nga+virama cluster rendered as a small
+    superscript on the FOLLOWING consonant, e.g. in "တနင်္ဂနွေ"/Sunday)
+    and conjunct ligatures (e.g. "ဇေဋ္ဌ"/Jyeshtha's stacked ဋ္ဌ) — both
+    need real glyph substitution/positioning reportlab has no access to.
+    Both remain readable in plain sequential form; only this vowel's
+    position was actually breaking legibility.
+
+    Safe to call on ANY string, not just pure Myanmar ones: strings with
+    no 'ေ' are returned unchanged (the common case, cheaply short-
+    circuited), and even a string mixing Myanmar with HTML-ish markup
+    (reportlab's Paragraph markup, e.g. "<b>...") or Latin text is left
+    alone at any point where the character immediately before 'ေ' isn't
+    itself Myanmar — it only ever reaches back past medials plus exactly
+    one base-consonant character, never past a tag or a space."""
+    if _MM_E_VOWEL not in text:
+        return text
+    out = []
+    for ch in text:
+        if ch == _MM_E_VOWEL:
+            j = len(out)
+            while j > 0 and out[j - 1] in _MM_MEDIALS:
+                j -= 1
+            if j > 0 and _MM_LO <= ord(out[j - 1]) <= _MM_HI:
+                j -= 1
+            out.insert(j, ch)
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def _P(text: str, style) -> Paragraph:
+    """Paragraph(), with _reorder_myanmar applied first."""
+    return Paragraph(_reorder_myanmar(text), style)
+
+
+def _reorder_rows(rows):
+    """Apply _reorder_myanmar to every cell of a Table's 2D row list."""
+    return [[_reorder_myanmar(str(cell)) for cell in row] for row in rows]
+
+
 def _add_column_row(d, x0, y, code, rest, code_col_w, code_size, size, color):
     """Draws `code` (FONT_NAME_BOLD, at `code_size` — a bit larger than the
     rest of the line, see _CODE_SIZE_FACTOR) at x0, and `rest` (FONT_NAME,
@@ -159,13 +223,19 @@ def _add_column_row(d, x0, y, code, rest, code_col_w, code_size, size, color):
 def _diamond_drawing(house_content, title, box=260):
     """Builds a reportlab Drawing of the Myanmar-style diamond chart, reusing
     the exact same geometry as the web SVG version (astro/chart_svg.py)."""
-    scale = box / 260.0
-    d = Drawing(box, box + 22)
-    d.add(String(box / 2, box + 8, title, fontName=FONT_NAME, fontSize=10 * scale,
-                  fillColor=colors.HexColor("#4f33cc"), textAnchor="middle"))
+    d = Drawing(box, box)
 
     def flip(y):  # reportlab y-axis grows upward; chart_svg's grows downward
         return box - y
+
+    # chart-type label ("ရာသီ"/"ဘာဝ"/"နဝင်း (D9)") in the unused center
+    # cell — same spot chart_svg.render_diamond_svg puts it in on the web,
+    # not above the whole diamond (an earlier version of this drawing put
+    # it there instead).
+    cx, cy, cw, ch = center_box(box)
+    d.add(String(cx + cw / 2, flip(cy + ch / 2 + 4), _reorder_myanmar(title),
+                  fontName=FONT_NAME_BOLD, fontSize=13 * box / 300.0,
+                  fillColor=colors.HexColor("#4f33cc"), textAnchor="middle"))
 
     polys = house_polygons(box)
     for h, poly in polys.items():
@@ -242,7 +312,7 @@ def generate_pdf(chart, diamonds=None) -> io.BytesIO:
     story = []
 
     binput = chart["input"]
-    story.append(Paragraph(f"MOTAA ဇာတာ အစီရင်ခံစာ — {binput.name}", h1))
+    story.append(_P(f"MOTAA စနစ် ဇာတာ — {binput.name}", h1))
     location_bit = f"{binput.location_name} &nbsp;·&nbsp; " if binput.location_name else ""
     meta = (f"{chart['local_dt'].strftime('%Y-%m-%d')} ({chart['local_dt'].strftime('%a')}) "
             f"{chart['local_dt'].strftime('%H:%M:%S')} "
@@ -250,13 +320,12 @@ def generate_pdf(chart, diamonds=None) -> io.BytesIO:
             f"{location_bit}"
             f"Lat {_dms(binput.latitude, 'N', 'S')}, Lon {_dms(binput.longitude, 'E', 'W')} &nbsp;·&nbsp; "
             f"Ayanamsa: {binput.ayanamsa} ({_dms_sym(chart['ayanamsa_value'])})")
-    story.append(Paragraph(meta, muted))
-    story.append(Paragraph(f"လဂ် — <b>{chart['lagna_rashi_mm']}</b> ({_dms_sym(chart['lagna_lon'] % 30)}) &nbsp;·&nbsp; "
-                            f"House system: {HOUSE_SYSTEM_LABEL_MAP.get(binput.house_system, binput.house_system)}", muted))
+    story.append(_P(meta, muted))
+    story.append(_P(f"လဂ် — <b>{chart['lagna_rashi_mm']}</b> ({_dms_sym(chart['lagna_lon'] % 30)}) &nbsp;·&nbsp; "
+                     f"House system: {HOUSE_SYSTEM_LABEL_MAP.get(binput.house_system, binput.house_system)}", muted))
     story.append(Spacer(1, 10))
 
     if diamonds:
-        story.append(Paragraph("ဇာတာ ဇယား", h2))
         row = [
             [_diamond_drawing(diamonds["rashi"], "ရာသီ", box=145),
              _diamond_drawing(diamonds["bhava"], "ဘာဝ", box=145),
@@ -268,7 +337,7 @@ def generate_pdf(chart, diamonds=None) -> io.BytesIO:
         story.append(Spacer(1, 10))
 
     # --- Planet strength table ---
-    story.append(Paragraph("ဂြိုဟ် အင်အား (MOTAA Step 1-6)", h2))
+    story.append(_P("ဂြိုဟ် အင်အား (MOTAA Step 1-6)", h2))
     header = ["ဂြိုဟ်", "ရာသီ", "အံသာ", "လိတ္တာ", "တန့်", "ကာရက", "S1", "S2", "S3", "S4", "S5", "S6", "နောက်ဆုံး"]
     rows = [header]
     for name in GRAHA9:
@@ -279,13 +348,13 @@ def generate_pdf(chart, diamonds=None) -> io.BytesIO:
             _pct(gp.step1), _pct(gp.step2), _pct(gp.step3), _pct(gp.step4), _pct(gp.step5), _pct(gp.step6),
             _pct(gp.final),
         ])
-    t = Table(rows, repeatRows=1)
+    t = Table(_reorder_rows(rows), repeatRows=1)
     t.setStyle(_table_style())
     story.append(t)
     story.append(Spacer(1, 14))
 
     # --- Bhava influence table ---
-    story.append(Paragraph("ဘာဝ လွှမ်းမိုးမှု (BhavaInfluence)", h2))
+    story.append(_P("ဘာဝ လွှမ်းမိုးမှု (BhavaInfluence)", h2))
     header2 = ["တန့်", "ရာသီ", "ပိုင်ရှင်", "သောမ/ပါပ", "ကိုယ်ပိုင် အင်အား", "ဂြိုဟ်ကောင်း", "ဂြိုဟ်ဆိုး", "စုစုပေါင်း"]
     rows2 = [header2]
     for row in chart["bhavas"]:
@@ -295,33 +364,33 @@ def generate_pdf(chart, diamonds=None) -> io.BytesIO:
             _pct(row.own_strength), _pct(row.positive_influence), _pct(row.negative_influence),
             _pct(row.net_influence),
         ])
-    t2 = Table(rows2, repeatRows=1)
+    t2 = Table(_reorder_rows(rows2), repeatRows=1)
     t2.setStyle(_table_style())
     story.append(t2)
     story.append(PageBreak())
 
     # --- Dasha ---
-    story.append(Paragraph("ဝိသောတ္တရီ ဒသာ (Vimshottari Dasha)", h2))
+    story.append(_P("ဝိသောတ္တရီ ဒသာ (Vimshottari Dasha)", h2))
     db = chart["dasha_balance"]
-    story.append(Paragraph(f"စောင့်ရင်းဒသာ — <b>{GRAHA_MM[db['lord']]} ဒသာ</b> "
-                            f"({db['years']} နှစ် {db['months']} လ {db['days']} ရက်)", body))
+    story.append(_P(f"စောင့်ရင်းဒသာ — <b>{GRAHA_MM[db['lord']]} ဒသာ</b> "
+                     f"({db['years']} နှစ် {db['months']} လ {db['days']} ရက်)", body))
     story.append(Spacer(1, 8))
     header3 = ["မဟာဒသာ", "အစ", "အဆုံး", "နှစ်ပေါင်း"]
     rows3 = [header3]
     for md in chart["dasha_sequence"]:
         rows3.append([GRAHA_MM[md.lord], md.start.strftime("%Y-%m-%d"),
                       md.end.strftime("%Y-%m-%d"), f"{md.years:.2f}"])
-    t3 = Table(rows3, repeatRows=1)
+    t3 = Table(_reorder_rows(rows3), repeatRows=1)
     t3.setStyle(_table_style())
     story.append(t3)
     story.append(Spacer(1, 12))
 
     for md in chart["dasha_sequence"][:3]:
-        story.append(Paragraph(f"{GRAHA_MM[md.lord]} မဟာဒသာ ({md.start.strftime('%Y-%m-%d')} – {md.end.strftime('%Y-%m-%d')}) ၏ အန္တရများ", body))
+        story.append(_P(f"{GRAHA_MM[md.lord]} မဟာဒသာ ({md.start.strftime('%Y-%m-%d')} – {md.end.strftime('%Y-%m-%d')}) ၏ အန္တရများ", body))
         arows = [["အန္တရ", "အစ", "အဆုံး"]]
         for ad in md.antardashas:
             arows.append([GRAHA_MM[ad.lord], ad.start.strftime("%Y-%m-%d"), ad.end.strftime("%Y-%m-%d")])
-        ta = Table(arows, repeatRows=1)
+        ta = Table(_reorder_rows(arows), repeatRows=1)
         ta.setStyle(_table_style(small=True))
         story.append(ta)
         story.append(Spacer(1, 8))
