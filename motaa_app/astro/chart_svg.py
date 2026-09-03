@@ -122,6 +122,67 @@ def house_label_anchor(house: int, box: float = 300.0, pull: float = 0.32) -> Po
     return _corner_point(house, poly, box, pull)
 
 
+def house_bbox(house: int, box: float = 300.0):
+    """Bounding box (minx, maxx, miny, maxy) of a house's own polygon — a
+    hard, geometry-derived backstop for planet-text placement, clamping
+    it so it can never cross into a *neighboring* house's cell (a
+    triangular corner house's own bbox is exactly its parent cell's own
+    square, since its 3 vertices already touch that cell's full extent
+    on every side). This matters because the pull/centering-based
+    placement above only *aims* the text block near the right spot —
+    whether it actually stays inside this house's own cell also depends
+    on how wide that block turns out to render, and a width estimate can
+    be wrong (the web SVG path only ever estimates; see
+    _approx_text_width_em) in a way no amount of anchor tuning alone can
+    guard against."""
+    poly = house_polygons(box)[house]
+    xs = [p[0] for p in poly]
+    ys = [p[1] for p in poly]
+    return min(xs), max(xs), min(ys), max(ys)
+
+
+# Which side of its shared diagonal each triangular corner house's own
+# region is on, as a linear constraint — derived from house_polygons()'s
+# own vertex lists (see the diagonal-orientation comments there for each
+# of the 4 corner cells): "y<=x" / "y>=x" for the two "\" corners
+# (top-left, bottom-right), "x+y<=3u" / "x+y>=3u" for the two "/" corners
+# (bottom-left, top-right). Kendra houses (1,4,7,10) aren't listed — they
+# have no diagonal to stay clear of.
+_DIAGONAL_SIDE = {
+    2: "y<=x", 9: "y<=x",
+    3: "y>=x", 8: "y>=x",
+    5: "x+y<=3u", 12: "x+y<=3u",
+    6: "x+y>=3u", 11: "x+y>=3u",
+}
+
+
+def diagonal_x0_bounds(house: int, box: float, min_y: float, max_y: float, block_w: float):
+    """(lo, hi) bounds on x0 — a text block's LEFT edge — so that block,
+    spanning the vertical range [min_y, max_y] (its top and bottom
+    lines) at a fixed horizontal width `block_w` per line, stays
+    entirely on this triangular house's own side of the diagonal it
+    shares with its sibling (house_bbox's clamp alone only keeps a block
+    inside the parent CELL, i.e. off the outer grid lines — it says
+    nothing about the diagonal splitting that cell in two). Both ends of
+    the block's vertical span matter because the diagonal itself is
+    slanted: whichever end is closer to crossing it is what actually
+    constrains a single, column-aligned x0 shared by every line (per-line
+    x0 would defeat the point of column-aligning the block's several
+    lines in the first place). Returns (-inf, inf) for a non-triangular
+    Kendra house, which has no diagonal to avoid."""
+    u = box / 3.0
+    side = _DIAGONAL_SIDE.get(house)
+    if side == "y<=x":
+        return max_y, float("inf")
+    if side == "y>=x":
+        return float("-inf"), min_y - block_w
+    if side == "x+y<=3u":
+        return float("-inf"), 3 * u - max_y - block_w
+    if side == "x+y>=3u":
+        return 3 * u - min_y, float("inf")
+    return float("-inf"), float("inf")
+
+
 _UNIFORM_SIZE = 6.5  # at box=300 — see text_layout_for_lines() docstring
 
 # The bold graha/lagna code is drawn a bit larger than the degree/minute
@@ -174,11 +235,22 @@ def _approx_text_width_em(s: str) -> float:
     """Rough visual width of `s`, in units of its own font-size ("em"),
     used only to lay out the two-column (code, degree/minute) planet-text
     blocks below — real glyph metrics aren't available on the Python side
-    for an SVG that's rendered by the browser's own font (see
-    reports/pdf_report.py for the PDF path, which *can* measure exact
-    widths via reportlab). Myanmar glyphs run wider than Latin/digits;
-    the invisible emoji variation selector (used after the retrograde
-    "®️" mark) has zero visual width and must not be counted."""
+    for an SVG that's rendered by the browser (see reports/pdf_report.py
+    for the PDF path, which *can* measure exact widths via reportlab).
+    These constants are tuned against Padauk specifically — the same
+    bundled font the PDF uses, and (as of render_diamond_svg's own
+    `font_family` default, plus its @font-face declaration in
+    static/style.css) now also the browser's actual rendering font for
+    this chart, not just a CSS fallback. Earlier this estimate was tuned
+    against Padauk while the SVG's font stack didn't actually list it —
+    which worked fine wherever the browser's own Myanmar-font fallback
+    (e.g. macOS's "Myanmar Text") happened to have similar metrics, but
+    on any browser/font-fallback combination where it didn't, text placed
+    using these numbers could land closer to (or past) a diagonal/grid
+    line than the PDF, which was always the safe, verified reference,
+    ever showed. Myanmar glyphs run wider than Latin/digits; the
+    invisible emoji variation selector (used after the retrograde "®️"
+    mark) has zero visual width and must not be counted."""
     total = 0.0
     for ch in s:
         if ch == "️":
@@ -205,7 +277,7 @@ def polygon_to_svg_points(poly: List[Point]) -> str:
 
 def render_diamond_svg(house_content: Dict[int, dict], center_label: str = "",
                         box: float = 300.0,
-                        font_family: str = "'Masterpiece Uni Round','Myanmar Text',sans-serif") -> str:
+                        font_family: str = "'Padauk','Myanmar Text','Myanmar MN',sans-serif") -> str:
     """
     house_content: {grid_position: {"rashi": str, "lagna": bool,
     "planets": [name, ...]}} for each of the 12 fixed grid slots (1 =
@@ -271,10 +343,11 @@ def render_diamond_svg(house_content: Dict[int, dict], center_label: str = "",
         n = len(planets)
         pad = box * 0.03
 
+        minx, maxx, miny, maxy = house_bbox(h, box)
         line_h, size, pull = text_layout_for_lines(n, box)
         anchor_x, anchor_y = house_label_anchor(h, box, pull=pull)
         start_y = anchor_y - (n - 1) * line_h / 2.0
-        start_y = max(pad, min(start_y, box - pad - max(n - 1, 0) * line_h))
+        start_y = max(miny + pad, min(start_y, maxy - pad - max(n - 1, 0) * line_h))
 
         # Two left-aligned columns (code, then degree/minute) within a
         # block that's still *centered* on the pull-biased anchor — same
@@ -286,15 +359,29 @@ def render_diamond_svg(house_content: Dict[int, dict], center_label: str = "",
         # single-line reach, and for a crowded house the anchor already
         # sits close to that vertex, which for a corner triangle is
         # always exactly on an internal grid line: the block then
-        # overshot past it into the neighboring cell.)
+        # overshot past it into the neighboring cell.) block_w itself is
+        # only an ESTIMATE (_approx_text_width_em, not real glyph
+        # metrics) — house_bbox's clamp below is what actually guarantees
+        # the block stays inside this house's own cell even when that
+        # estimate runs short of the browser's real rendered width.
         code_size = size * _CODE_SIZE_FACTOR
-        gap_em = 0.15
+        gap_em = 0.08
         code_col_em = max((_approx_text_width_em(code) for code, _ in planets), default=0.0)
         code_col_w = code_size * code_col_em + size * gap_em
         rest_w = max((size * _approx_text_width_em(rest) for _, rest in planets), default=0.0)
         block_w = code_col_w + rest_w
         x0 = anchor_x - block_w / 2.0
-        x0 = max(pad, min(x0, box - pad - block_w))
+        end_y = start_y + max(n - 1, 0) * line_h
+        diag_lo, diag_hi = diagonal_x0_bounds(h, box, start_y, end_y, block_w)
+        lo, hi = max(minx + pad, diag_lo), min(maxx - pad - block_w, diag_hi)
+        # A genuinely crowded house (5+ lines) can be too wide to fit
+        # both this cell's own bbox AND clear its diagonal at once, no
+        # matter where it's placed — there's only so much room in a
+        # 1/9th-of-the-box triangle. Rather than fully committing to one
+        # boundary (either wholly on the neighboring cell's grid line, or
+        # wholly across the diagonal), split the difference so it lands
+        # equally, minimally short of both instead of squarely on either.
+        x0 = max(lo, min(x0, hi)) if lo <= hi else (lo + hi) / 2.0
 
         for i, (code, rest) in enumerate(planets):
             y = start_y + i * line_h

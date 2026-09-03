@@ -28,8 +28,8 @@ from reportlab.graphics.shapes import Drawing, Polygon, Line, String
 from reportlab.graphics import renderPM
 
 from astro.constants import GRAHA_MM, RASHI_MM, GRAHA9
-from astro.chart_svg import (house_polygons, house_label_anchor, center_box, text_layout_for_lines,
-                              _CODE_SIZE_FACTOR)
+from astro.chart_svg import (house_polygons, house_label_anchor, house_bbox, center_box,
+                              text_layout_for_lines, diagonal_x0_bounds, _CODE_SIZE_FACTOR)
 from astro.ephemeris import HOUSE_SYSTEM_LABEL_MAP
 
 _APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -203,21 +203,29 @@ def _diamond_drawing(house_content, title, box=260):
         n = len(planets)
         pad = box * 0.03
 
+        minx, maxx, miny, maxy = house_bbox(h, box)
         line_h, size, pull = text_layout_for_lines(n, box)
         ax, ay = house_label_anchor(h, box, pull=pull)
         start_y = ay + (n - 1) * line_h / 2.0
-        start_y = min(start_y, box - pad)
-        start_y = max(start_y, pad + max(n - 1, 0) * line_h)
+        start_y = min(start_y, maxy - pad)
+        start_y = max(start_y, miny + pad + max(n - 1, 0) * line_h)
 
         code_size = size * _CODE_SIZE_FACTOR
-        gap = size * 0.15
+        gap = size * 0.08
         code_col_w = max((pdfmetrics.stringWidth(code, FONT_NAME_BOLD, code_size) for code, _ in planets),
                           default=0.0) + gap
         rest_w = max((pdfmetrics.stringWidth(rest, FONT_NAME, size) for _, rest in planets),
                      default=0.0)
         block_w = code_col_w + rest_w
         x0 = ax - block_w / 2.0
-        x0 = max(pad, min(x0, box - pad - block_w))
+        min_y_line = start_y - max(n - 1, 0) * line_h
+        diag_lo, diag_hi = diagonal_x0_bounds(h, box, min_y_line, start_y, block_w)
+        lo, hi = max(minx + pad, diag_lo), min(maxx - pad - block_w, diag_hi)
+        # See the matching comment in chart_svg.render_diamond_svg: a
+        # genuinely crowded house can be too wide to fit both this cell's
+        # bbox and clear its diagonal — split the difference rather than
+        # fully committing to one boundary.
+        x0 = max(lo, min(x0, hi)) if lo <= hi else (lo + hi) / 2.0
 
         for i, (code, rest) in enumerate(planets):
             y = start_y - i * line_h
@@ -295,7 +303,7 @@ def generate_pdf(chart, diamonds=None) -> io.BytesIO:
     # --- Dasha ---
     story.append(Paragraph("ဝိသောတ္တရီ ဒသာ (Vimshottari Dasha)", h2))
     db = chart["dasha_balance"]
-    story.append(Paragraph(f"မွေးချိန်လက်ကျန်ဒသာ — <b>{GRAHA_MM[db['lord']]} ဒသာ</b> "
+    story.append(Paragraph(f"စောင့်ရင်းဒသာ — <b>{GRAHA_MM[db['lord']]} ဒသာ</b> "
                             f"({db['years']} နှစ် {db['months']} လ {db['days']} ရက်)", body))
     story.append(Spacer(1, 8))
     header3 = ["မဟာဒသာ", "အစ", "အဆုံး", "နှစ်ပေါင်း"]

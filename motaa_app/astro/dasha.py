@@ -165,7 +165,7 @@ MONTH_DAYS = YEAR_DAYS / 12.0  # average civil month length, for the y/m/d break
 
 
 def dasha_balance_at_birth(sequence: List[MahaDasha]):
-    """The "မွေးချိန်လက်ကျန်ဒသာ" (birth-time balance dasha) — the
+    """The "စောင့်ရင်းဒသာ" (birth-time balance dasha) — the
     remaining portion, as of birth itself, of the Mahadasha whose lord is
     the birth nakshatra's ruler. compute_vimshottari() already computes
     this correctly as sequence[0] (a partial Mahadasha, its `years`

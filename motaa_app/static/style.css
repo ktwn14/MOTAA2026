@@ -1,3 +1,26 @@
+/* Bundled the same way as reports/pdf_report.py's PDF font (see
+   static/fonts/Padauk-LICENSE.txt) — used specifically for the diamond
+   charts below (.chart-panel svg text), not the page's general
+   typography, because the chart's own text-layout math (astro/
+   chart_svg.py's _approx_text_width_em) is only tuned against this
+   font's actual glyph metrics. Left to the browser's own Myanmar font
+   fallback (e.g. macOS's "Myanmar Text"/"Myanmar MN", a different
+   design with different widths), a planet's degree/minute text could
+   land closer to — or past — the diagonal/grid line than the PDF, which
+   always uses this exact font, ever shows. */
+@font-face {
+  font-family: "Padauk";
+  src: url("/static/fonts/Padauk-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+}
+@font-face {
+  font-family: "Padauk";
+  src: url("/static/fonts/Padauk-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+}
+
 :root {
   --bg: #f4f5f7;
   --card-bg: #ffffff;
