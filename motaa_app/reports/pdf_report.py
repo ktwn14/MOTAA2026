@@ -256,13 +256,48 @@ def _font_runs(text: str, default_font: str):
     Round has no bold face of its own, and silently keeping it at
     regular weight would defeat the point of asking for bold (the lagna
     rashi name, a dasha lord's name, …), so those short bold values fall
-    back to Padauk-Bold instead of losing their emphasis."""
+    back to Padauk-Bold instead of losing their emphasis.
+
+    A virama (U+1039 — what stacks a conjunct consonant under the one
+    before it, e.g. "ဗုဒ္ဓဟူး"/Mercury or "ပုဗ္ဗာသဠ်"/Purva Ashadha) and
+    the ONE character on each side of it are always forced onto the SAME
+    font as the virama itself, never split across a font boundary —
+    reportlab has no real Myanmar shaping engine, so a stacked conjunct
+    only reads correctly at all when every glyph in it comes from one
+    font's own (font-specific) non-contextual rendering of that
+    sequence; splitting the run mid-conjunct because just the virama
+    itself needed a different font doesn't draw two separate acceptable
+    halves, it draws broken/mispositioned glyphs. Since a virama is
+    meaningless outside a conjunct, it and its neighbors are pinned to
+    `default_font` (Padauk) — Padauk's own non-contextual virama glyph is
+    a small, unobtrusive mark, unlike Masterpiece Uni Round's large,
+    prominent dotted circle, so Padauk is the one font where an unshaped
+    conjunct still reads acceptably.
+
+    (A separate, unrelated rendering gap — a bare medial consonant sign,
+    e.g. medial RA "ြ", with no dependent vowel sign after it — isn't
+    something this function can fix at all: neither bundled font has a
+    usable glyph for that exact combination regardless of font choice,
+    confirmed against a real generated PDF and cross-checked with a real
+    text-shaping engine, not just reportlab's own lack of one. That one
+    was fixed at the data layer instead, in astro/constants.py's own
+    Nakshatra names — see its own history for specifics — since the fix
+    there was to add the dependent vowel sign those names were already
+    missing, not a font-selection change.)"""
     if not FONT_NAME_DISPLAY or not text or default_font == FONT_NAME_BOLD:
         return [(default_font, text)] if text else []
+    n = len(text)
+    force_default = [False] * n
+    for i, ch in enumerate(text):
+        if ch == "္":  # virama/asat
+            for j in (i - 1, i, i + 1):
+                if 0 <= j < n:
+                    force_default[j] = True
     runs = []
     cur_font, cur_chars = None, []
-    for ch in text:
-        want = FONT_NAME_DISPLAY if _display_font_covers(ch) else default_font
+    for i, ch in enumerate(text):
+        want = default_font if force_default[i] else (
+            FONT_NAME_DISPLAY if _display_font_covers(ch) else default_font)
         if want != cur_font:
             if cur_chars:
                 runs.append((cur_font, "".join(cur_chars)))
